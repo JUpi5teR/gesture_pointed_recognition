@@ -1,0 +1,25 @@
+# 模型文件夹
+models/
+
+# VSCode 配置
+.vscode/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# YOLO 模型文件
+yolov8n.pt
+yolov8*.pt
+
+# 运行日志与输出
+run_err.txt
+run_log.txt
+run_stdout.txt
+
+# 可选通用忽略
+.DS_Store
+*.log
+*.tmp

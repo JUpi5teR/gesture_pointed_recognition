@@ -1,0 +1,6 @@
+opencv-python
+mediapipe
+numpy
+pyk4a
+ultralytics
+torch
