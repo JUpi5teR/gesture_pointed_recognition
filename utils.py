@@ -49,3 +49,37 @@ def pixel_to_point(depth_mm, u, v, intrinsics):
     X = (u - cx) * Z / fx
     Y = (v - cy) * Z / fy
     return (X, Y, Z)
+
+
+def pad_to_square(img, color=(0,0,0)):
+    """Pad image (H,W,...) to square by adding borders. Returns (padded_img, pad_x, pad_y, new_w, new_h, orig_w, orig_h).
+    pad_x = number of pixels added on left, pad_y on top.
+    """
+    h, w = img.shape[:2]
+    size = max(h, w)
+    pad_vert = size - h
+    pad_horiz = size - w
+    pad_top = pad_vert // 2
+    pad_bottom = pad_vert - pad_top
+    pad_left = pad_horiz // 2
+    pad_right = pad_horiz - pad_left
+    if img.ndim == 2:
+        padded = np.full((size, size), color[0] if isinstance(color, tuple) else color, dtype=img.dtype)
+        padded[pad_top:pad_top+h, pad_left:pad_left+w] = img
+    else:
+        padded = np.full((size, size, img.shape[2]), color, dtype=img.dtype)
+        padded[pad_top:pad_top+h, pad_left:pad_left+w, :] = img
+    return padded, pad_left, pad_top, size, size, w, h
+
+
+def map_normalized_landmark_to_original(lm_x, lm_y, pad_left, pad_top, pad_w, pad_h, orig_w, orig_h):
+    """Map normalized landmark coords (0..1 relative to padded image) to original image pixel coords.
+    Returns (x,y) clamped to original image bounds.
+    """
+    x_pad = lm_x * pad_w
+    y_pad = lm_y * pad_h
+    x = int(round(x_pad - pad_left))
+    y = int(round(y_pad - pad_top))
+    x = max(0, min(orig_w-1, x))
+    y = max(0, min(orig_h-1, y))
+    return x, y

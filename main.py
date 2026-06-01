@@ -2,7 +2,7 @@ import cv2
 import time
 import logging
 from hardware_camera import LocalCamera, AzureKinect, _HAS_K4A
-from hand_module import HandDetector
+from hand_module import HandDetector, GestureRecognizer
 from face_module import FaceExpression
 from object_module import ObjectDetector
 from utils import bbox_center, angle_between, sample_depth, pixel_to_point
@@ -91,7 +91,8 @@ def main():
         capA = LocalCamera(1)
 
     face = FaceExpression()
-    hand = HandDetector()
+    recognizer = GestureRecognizer()
+    # legacy direct detector also available as recognizer.detector
     try:
         obj = ObjectDetector()
     except Exception as e:
@@ -109,7 +110,8 @@ def main():
             logger.error('Camera read failed')
             break
         face_expr, _ = face.detect(frameF)
-        hands = hand.detect(frameA)
+        analysis = recognizer.analyze(frameA)
+        hands = analysis['hands']
         dets = obj.detect(frameA) if obj is not None else []
         sel = choose_target_3d(hands, dets, depth_img, intrinsics) if use_ak else None
         # normalize frames for display

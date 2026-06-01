@@ -61,21 +61,25 @@ else:
                     raise RuntimeError('Failed to create FaceLandmarker with MediaPipe Tasks API: %s' % e)
 
         def detect(self, image):
-            # Construct MediaPipe Image from numpy array
+            # Construct MediaPipe Image from numpy array with square padding for stable projection
+            from utils import pad_to_square, map_normalized_landmark_to_original
             from mediapipe.tasks.python.vision.core.image import Image as MpImage, ImageFormat
             arr = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            mp_image = MpImage(ImageFormat.SRGB, arr)
+            padded, pad_left, pad_top, pad_w, pad_h, orig_w, orig_h = pad_to_square(arr)
+            mp_image = MpImage(ImageFormat.SRGB, padded)
             res = self.detector.detect(mp_image)
             if not res.face_landmarks:
                 return None, None
             lm = res.face_landmarks[0]
-            h, w = image.shape[:2]
             # Support both proto object with .landmark and raw list of landmarks
             if hasattr(lm, 'landmark'):
                 landmark_iter = lm.landmark
             else:
                 landmark_iter = lm
-            pts = [(int(p.x*w), int(p.y*h)) for p in landmark_iter]
+            pts = []
+            for p in landmark_iter:
+                x,y = map_normalized_landmark_to_original(p.x, p.y, pad_left, pad_top, pad_w, pad_h, orig_w, orig_h)
+                pts.append((x,y))
             expr = self._heuristic_expression(pts)
             return expr, pts
 
