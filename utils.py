@@ -287,3 +287,75 @@ def compute_target_expectation(target_points, window_size=10):
             mean = np.mean(filtered, axis=0)
 
     return tuple(mean)
+
+
+class TargetDwellTracker:
+    """
+    Track how long target point dwells in each detection region.
+    """
+    def __init__(self, dwell_threshold_frames=90, fps=30):  # 90 frames = 3 seconds at 30fps
+        self.dwell_threshold_frames = dwell_threshold_frames
+        self.fps = fps
+        self.region_dwell = {}  # box_id -> frame count
+        self.region_points = {}  # box_id -> list of target points
+        self.locked_target = None
+        self.locked_box = None
+        self.is_locked = False
+
+    def update(self, target_pt, dets):
+        """
+        Update dwell time for each detection.
+        target_pt: (x, y) or None
+        dets: list of detections with 'box' field
+        Returns: (locked_target, locked_box) or (None, None) if not locked
+        """
+        if target_pt is None or not dets:
+            self._reset_all()
+            return self.locked_target, self.locked_box
+
+        # Find which detection the target is in
+        current_det_idx = None
+        for i, det in enumerate(dets):
+            box = det['box']
+            if point_in_box(target_pt, box):
+                current_det_idx = i
+                break
+
+        # Reset all counters and collect points for current detection
+        for i in range(len(dets)):
+            if i == current_det_idx:
+                # Increment dwell time for current detection
+                self.region_dwell[i] = self.region_dwell.get(i, 0) + 1
+                if i not in self.region_points:
+                    self.region_points[i] = []
+                self.region_points[i].append(target_pt)
+            else:
+                # Reset other detections
+                if i in self.region_dwell:
+                    del self.region_dwell[i]
+                if i in self.region_points:
+                    del self.region_points[i]
+
+        # Check if any detection exceeded dwell threshold
+        for i, dwell_count in self.region_dwell.items():
+            if dwell_count >= self.dwell_threshold_frames and not self.is_locked:
+                # Lock target at the point with highest dwell in this region
+                self.locked_target = compute_target_expectation(self.region_points[i], window_size=20)
+                self.locked_box = tuple(dets[i]['box'])
+                self.is_locked = True
+                return self.locked_target, self.locked_box
+
+        return self.locked_target, self.locked_box
+
+    def reset(self):
+        """Reset tracking state (called when shake detected)."""
+        self.locked_target = None
+        self.locked_box = None
+        self.is_locked = False
+        self.region_dwell.clear()
+        self.region_points.clear()
+
+    def _reset_all(self):
+        """Reset all counters when target not in any region."""
+        self.region_dwell.clear()
+        self.region_points.clear()

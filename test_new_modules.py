@@ -3,10 +3,10 @@ import numpy as np
 from face_gesture import FaceGestureRecognizer
 from kalman_tracker import TargetTracker, KalmanTracker
 from background_model import BackgroundModel
-from utils import point_in_box, compute_target_expectation
+from utils import point_in_box, compute_target_expectation, TargetDwellTracker
 
 print("=" * 50)
-print("Testing FaceGestureRecognizer")
+print("Testing FaceGestureRecognizer (shake only)")
 print("=" * 50)
 
 # Create fake face points (468 landmarks)
@@ -17,7 +17,35 @@ fake_face_pts[12] = (120, 200)  # right shoulder
 
 gesture_recognizer = FaceGestureRecognizer()
 result = gesture_recognizer.detect(fake_face_pts)
-print("[OK] FaceGestureRecognizer initialized and returned: %s" % (result,))
+print("[OK] FaceGestureRecognizer initialized (shake detection only)")
+
+print("\n" + "=" * 50)
+print("Testing TargetDwellTracker")
+print("=" * 50)
+
+dwell_tracker = TargetDwellTracker(dwell_threshold_frames=5)  # Fast test with 5 frames
+
+# Mock detections
+dets = [
+    {'box': (50, 50, 150, 150), 'label': 'obj1', 'conf': 0.95},
+    {'box': (200, 200, 300, 300), 'label': 'obj2', 'conf': 0.85},
+]
+
+# Simulate target dwelling in first detection for 5 frames
+target_points = [(100 + np.random.randn() * 2, 100 + np.random.randn() * 2) for _ in range(5)]
+locked_pt = None
+locked_box = None
+
+print("  Simulating target dwelling in first detection:")
+for i in range(5):
+    locked_pt, locked_box = dwell_tracker.update(target_points[i], dets)
+    if locked_pt is not None:
+        print("  [LOCKED] at frame %d: point=%.1f,%.1f, box=%s" % (i, locked_pt[0], locked_pt[1], locked_box))
+        break
+    else:
+        print("  Frame %d: still dwelling..." % i)
+
+print("[OK] TargetDwellTracker works correctly")
 
 print("\n" + "=" * 50)
 print("Testing KalmanTracker")

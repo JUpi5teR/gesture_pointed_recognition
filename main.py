@@ -9,7 +9,7 @@ from object_module import ObjectDetector
 from face_gesture import FaceGestureRecognizer
 from kalman_tracker import TargetTracker
 from background_model import BackgroundModel
-from utils import bbox_center, angle_between, sample_depth, pixel_to_point, choose_target_2d, point_in_box, compute_target_expectation
+from utils import bbox_center, angle_between, sample_depth, pixel_to_point, choose_target_2d, point_in_box, compute_target_expectation, TargetDwellTracker
 
 
 # Logging to file to capture runtime messages
@@ -20,12 +20,24 @@ logger.info('main.py started')
 
 # Use AzureKinect if available to get aligned depth; otherwise fallback to second webcam (no depth).
 
-def draw_info(frame, face_expr, hands, dets, selected_idx, target_pt=None, tracking_mode=False):
-    """Draw information on frame. Only show objects if target_pt is inside them."""
+def draw_info(frame, face_expr, face_pts, hands, dets, selected_idx, target_pt=None, tracking_mode=False):
+    """Draw information on frame. Show face landmarks, hands, and objects when target overlaps."""
     if face_expr:
         status = "TRACKING" if tracking_mode else "IDLE"
         cv2.putText(frame, f'Face: {face_expr} | {status}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0),2)
 
+    # Draw face landmarks
+    if face_pts is not None and len(face_pts) > 0:
+        # Key points to display: nose (1), left shoulder (11), right shoulder (12)
+        key_indices = [1, 11, 12]
+        key_names = ['Nose', 'LShoulder', 'RShoulder']
+        for idx, name in zip(key_indices, key_names):
+            if idx < len(face_pts):
+                x, y = face_pts[idx]
+                cv2.circle(frame, (int(x), int(y)), 4, (0, 255, 255), -1)
+                cv2.putText(frame, name, (int(x)+5, int(y)-5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+
+    # Draw hand landmarks
     for i, hand in enumerate(hands):
         for idx, p in enumerate(hand['pts']):
             cv2.circle(frame, (p[0], p[1]), 2, (255,0,0), -1)
@@ -115,9 +127,10 @@ def main():
             obj = None
 
     # Initialize new modules for face gesture recognition, tracking, and background modeling
-    face_gesture = FaceGestureRecognizer(history_len=15, nod_threshold=0.12, shake_threshold=0.25)
+    face_gesture = FaceGestureRecognizer(history_len=15, shake_threshold=0.25)
     target_tracker = TargetTracker()
     bg_model = BackgroundModel(roi_pad=30)
+    dwell_tracker = TargetDwellTracker(dwell_threshold_frames=90)  # 3 seconds at 30fps
 
     # State machine: IDLE (normal pointing) or TRACKING (locked target)
     tracking_state = 'IDLE'
@@ -138,26 +151,18 @@ def main():
         # Detect face expression and get facial landmarks
         face_expr, face_pts = face.detect(frameF)
 
-        # Detect face gestures (nod/shake)
+        # Detect face gestures (shake only)
         gesture = face_gesture.detect(face_pts)
-        if gesture == 'nod_detected':
-            # Lock target: collect recent target points and compute expectation
-            if target_pt is not None:
-                target_point_history.append(target_pt)
-                locked_target = compute_target_expectation(list(target_point_history), window_size=5)
-                if locked_target is not None:
-                    tracking_state = 'TRACKING'
-                    target_tracker.initialize(locked_target, tracked_object_box or (0, 0, 1, 1))
-                    bg_model.initialize(frameA)
-                    logger.info('Target locked at %s', locked_target)
 
-        elif gesture == 'shake_detected' and tracking_state == 'TRACKING':
+        # Check for shake to exit tracking
+        if gesture == 'shake_detected' and tracking_state == 'TRACKING':
             # Exit tracking mode
             tracking_state = 'IDLE'
             bg_model.reset()
             target_tracker.reset()
+            dwell_tracker.reset()
             target_point_history.clear()
-            logger.info('Tracking exited')
+            logger.info('Tracking exited (shake detected)')
 
         # Hand gesture and object detection
         analysis = recognizer.analyze(frameA)
@@ -223,6 +228,21 @@ def main():
             except Exception as e:
                 logger.warning('target compute failed: %s', e)
 
+        # Time-based target locking: check dwell time in regions
+        if tracking_state == 'IDLE':
+            locked_pt, locked_box = dwell_tracker.update(target_pt, dets)
+            if locked_pt is not None and locked_box is not None:
+                # Target locked after dwelling 3 seconds in a region
+                tracking_state = 'TRACKING'
+                target_tracker.initialize(locked_pt, locked_box)
+                bg_model.initialize(frameA)
+                target_pt = locked_pt
+                tracked_object_box = locked_box
+                logger.info('Target locked at %s after 3s dwell', locked_pt)
+        else:
+            # In TRACKING mode, dwell tracker stays inactive
+            dwell_tracker._reset_all()
+
         # Update tracking if in TRACKING mode
         if tracking_state == 'TRACKING' and target_pt is not None:
             # Find object containing target point
@@ -253,8 +273,8 @@ def main():
             return f2
         fF = _norm_frame(frameF)
         fA = _norm_frame(frameA)
-        draw_info(fF, face_expr, [], [], None, target_pt=None, tracking_mode=False)
-        draw_info(fA, None, hands, dets, sel, target_pt=target_pt, tracking_mode=(tracking_state == 'TRACKING'))
+        draw_info(fF, face_expr, face_pts, [], [], None, target_pt=None, tracking_mode=False)
+        draw_info(fA, None, None, hands, dets, sel, target_pt=target_pt, tracking_mode=(tracking_state == 'TRACKING'))
 
         # Draw target point only (no ray)
         if target_pt is not None:
