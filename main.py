@@ -1,11 +1,15 @@
 import cv2
 import time
 import logging
+import collections
 from hardware_camera import LocalCamera, AzureKinect, _HAS_K4A
 from hand_module import HandDetector, GestureRecognizer
 from face_module import FaceExpression
 from object_module import ObjectDetector
-from utils import bbox_center, angle_between, sample_depth, pixel_to_point, choose_target_2d
+from face_gesture import FaceGestureRecognizer
+from kalman_tracker import TargetTracker
+from background_model import BackgroundModel
+from utils import bbox_center, angle_between, sample_depth, pixel_to_point, choose_target_2d, point_in_box, compute_target_expectation
 
 
 # Logging to file to capture runtime messages
@@ -16,21 +20,32 @@ logger.info('main.py started')
 
 # Use AzureKinect if available to get aligned depth; otherwise fallback to second webcam (no depth).
 
-def draw_info(frame, face_expr, hands, dets, selected_idx):
+def draw_info(frame, face_expr, hands, dets, selected_idx, target_pt=None, tracking_mode=False):
+    """Draw information on frame. Only show objects if target_pt is inside them."""
     if face_expr:
-        cv2.putText(frame, f'Face: {face_expr}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0),2)
+        status = "TRACKING" if tracking_mode else "IDLE"
+        cv2.putText(frame, f'Face: {face_expr} | {status}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0),2)
+
     for i, hand in enumerate(hands):
         for idx, p in enumerate(hand['pts']):
             cv2.circle(frame, (p[0], p[1]), 2, (255,0,0), -1)
         st = hand['fingers']
         cv2.putText(frame, f"Hand{i} idx_ext:{st['index']}", (10,40+20*i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255),1)
+
+    # Only show detections if target_pt is inside them
     for j, d in enumerate(dets):
         x1,y1,x2,y2 = d['box']
-        color = (0,255,0)
-        if j==selected_idx:
-            color = (0,0,255)
-        cv2.rectangle(frame, (x1,y1),(x2,y2), color, 2)
-        cv2.putText(frame, f"{d['label']}:{d['conf']:.2f}", (x1,y1-6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,1)
+        show_det = False
+
+        # If tracking and target_pt is in this box, show it
+        if tracking_mode and target_pt is not None:
+            if point_in_box(target_pt, (x1, y1, x2, y2)):
+                show_det = True
+
+        if show_det:
+            color = (0, 0, 255)  # Red for tracked
+            cv2.rectangle(frame, (x1,y1),(x2,y2), color, 3)
+            cv2.putText(frame, f"{d['label']}:{d['conf']:.2f}", (x1,y1-6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
 
 def choose_target_3d(hands, dets, depth_img, intrinsics):
@@ -99,6 +114,16 @@ def main():
             logger.warning('Object detector init failed: %s', e)
             obj = None
 
+    # Initialize new modules for face gesture recognition, tracking, and background modeling
+    face_gesture = FaceGestureRecognizer(history_len=15, nod_threshold=0.12, shake_threshold=0.25)
+    target_tracker = TargetTracker()
+    bg_model = BackgroundModel(roi_pad=30)
+
+    # State machine: IDLE (normal pointing) or TRACKING (locked target)
+    tracking_state = 'IDLE'
+    tracked_object_box = None
+    target_point_history = collections.deque(maxlen=10)
+
     while True:
         okF, frameF = capF.read()
         if use_ak:
@@ -109,13 +134,40 @@ def main():
         if not okF or not okA:
             logger.error('Camera read failed')
             break
-        face_expr, _ = face.detect(frameF)
+
+        # Detect face expression and get facial landmarks
+        face_expr, face_pts = face.detect(frameF)
+
+        # Detect face gestures (nod/shake)
+        gesture = face_gesture.detect(face_pts)
+        if gesture == 'nod_detected':
+            # Lock target: collect recent target points and compute expectation
+            if target_pt is not None:
+                target_point_history.append(target_pt)
+                locked_target = compute_target_expectation(list(target_point_history), window_size=5)
+                if locked_target is not None:
+                    tracking_state = 'TRACKING'
+                    target_tracker.initialize(locked_target, tracked_object_box or (0, 0, 1, 1))
+                    bg_model.initialize(frameA)
+                    logger.info('Target locked at %s', locked_target)
+
+        elif gesture == 'shake_detected' and tracking_state == 'TRACKING':
+            # Exit tracking mode
+            tracking_state = 'IDLE'
+            bg_model.reset()
+            target_tracker.reset()
+            target_point_history.clear()
+            logger.info('Tracking exited')
+
+        # Hand gesture and object detection
         analysis = recognizer.analyze(frameA)
         hands = analysis['hands']
         dets = obj.detect(frameA) if obj is not None else []
+
         # 2D-selection: fast, depth-free target selection using index joint7->8
         sel = choose_target_2d(hands, dets)
-        # compute ray intersection target if depth available
+
+        # Compute ray intersection target if depth available
         target_pt = None
         target_3d = None
         tip_for_draw = None
@@ -130,15 +182,12 @@ def main():
                         hu, hv, hZ = hit
                         target_pt = (int(round(hu)), int(round(hv)))
                         target_3d = (hu, hv, hZ)
-                        tip_for_draw = (int(round(tip_3d_kp[0]*1000 if tip_3d_kp[0] != 0 else 0)),
-                                       int(round(tip_3d_kp[1]*1000 if tip_3d_kp[1] != 0 else 0)))
 
                 # Fallback to contour-based pointing if keypoint method fails
                 if target_pt is None:
                     tip, dir_img = recognizer.detect_pointing_direction(frameA, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0)
                     if tip is not None and dir_img is not None:
                         tip_px = (int(tip[0]), int(tip[1]))
-                        tip_for_draw = tip_px
                         tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
                         if tip_d and tip_d > 0:
                             tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
@@ -158,7 +207,6 @@ def main():
                     h0 = hands[0]
                     tip_px = h0['pts'][8][:2]
                     base_px = h0['pts'][5][:2]
-                    tip_for_draw = (int(tip_px[0]), int(tip_px[1]))
                     tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
                     base_d = sample_depth(depth_img, base_px[0], base_px[1], win=6)
                     if tip_d and base_d:
@@ -174,6 +222,19 @@ def main():
                                 target_3d = (hu, hv, hZ)
             except Exception as e:
                 logger.warning('target compute failed: %s', e)
+
+        # Update tracking if in TRACKING mode
+        if tracking_state == 'TRACKING' and target_pt is not None:
+            # Find object containing target point
+            for det in dets:
+                box = det['box']
+                if point_in_box(target_pt, box):
+                    tracked_object_box = box
+                    # Use Kalman filter to smooth tracking
+                    tracked_pt, tracked_box = target_tracker.track(target_pt, box)
+                    target_pt = tuple(int(x) for x in tracked_pt[:2])
+                    tracked_object_box = tuple(int(x) for x in tracked_box)
+                    break
 
         # normalize frames for display
         def _norm_frame(f):
@@ -192,21 +253,13 @@ def main():
             return f2
         fF = _norm_frame(frameF)
         fA = _norm_frame(frameA)
-        draw_info(fF, face_expr, [], [], None)
-        draw_info(fA, None, hands, dets, sel)
-        # draw target if found
+        draw_info(fF, face_expr, [], [], None, target_pt=None, tracking_mode=False)
+        draw_info(fA, None, hands, dets, sel, target_pt=target_pt, tracking_mode=(tracking_state == 'TRACKING'))
+
+        # Draw target point only (no ray)
         if target_pt is not None:
             try:
-                cv2.circle(fA, target_pt, 8, (0,0,255), -1)
-                # draw line from fingertip to target (use contour or landmark tip if available)
-                if tip_for_draw is not None:
-                    tip_draw = (int(tip_for_draw[0]), int(tip_for_draw[1]))
-                elif hands:
-                    tip_draw = (int(hands[0]['pts'][8][0]), int(hands[0]['pts'][8][1]))
-                else:
-                    tip_draw = None
-                if tip_draw is not None:
-                    cv2.line(fA, tip_draw, target_pt, (0,0,255), 2)
+                cv2.circle(fA, target_pt, 8, (0, 0, 255), -1)
             except Exception:
                 pass
         combined = cv2.hconcat([cv2.resize(fF, (640,480)), cv2.resize(fA, (640,480))])

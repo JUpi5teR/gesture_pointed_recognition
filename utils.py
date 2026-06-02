@@ -244,3 +244,46 @@ def choose_target_2d(hands, dets, alpha=0.6, angle_thresh_deg=30.0, dist_coeff=1
     if best_score <= 0.0:
         return None
     return best_j
+
+
+def point_in_box(point, box):
+    """
+    Check if point (x, y) is inside box (x1, y1, x2, y2).
+    Returns True if point is inside, False otherwise.
+    """
+    x, y = point
+    x1, y1, x2, y2 = box
+    return x1 <= x <= x2 and y1 <= y <= y2
+
+
+def compute_target_expectation(target_points, window_size=10):
+    """
+    Compute expectation (mean) of target points with outlier filtering.
+    target_points: list of (x, y) tuples
+    window_size: number of recent points to use
+    Returns: (mean_x, mean_y) or None if insufficient data
+    """
+    if not target_points or len(target_points) < 3:
+        return None
+
+    # Use recent points
+    recent = target_points[-window_size:] if len(target_points) > window_size else target_points
+    points_arr = np.array(recent, dtype=float)
+
+    # Compute mean
+    mean = np.mean(points_arr, axis=0)
+
+    # Compute std dev for outlier filtering
+    std = np.std(points_arr, axis=0)
+
+    # Filter outliers: points within mean ± 2*std
+    if std[0] > 0 and std[1] > 0:
+        mask = (
+            (np.abs(points_arr[:, 0] - mean[0]) <= 2.0 * std[0]) &
+            (np.abs(points_arr[:, 1] - mean[1]) <= 2.0 * std[1])
+        )
+        filtered = points_arr[mask]
+        if len(filtered) > 0:
+            mean = np.mean(filtered, axis=0)
+
+    return tuple(mean)
