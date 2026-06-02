@@ -212,6 +212,163 @@ class GestureRecognizer:
                 count += 1
         return count
 
+    def detect_pointing_direction(self, frame, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0):
+        """
+        Detect pointing finger tip and direction using contour-based algorithm.
+        Returns (tip_pt (x,y), dir_vec (dx,dy)) in image pixel coordinates or (None,None).
+        """
+        # get mask
+        if roi is not None:
+            x,y,w,h = roi
+            crop = frame[y:y+h, x:x+w]
+            mask = self.hsv_color_mask(frame, roi=roi)
+            off_x, off_y = x, y
+        else:
+            mask = self.hsv_color_mask(frame)
+            crop = frame
+            off_x, off_y = 0,0
+        # find largest contour
+        cnts,_ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not cnts:
+            return None, None
+        c = max(cnts, key=cv2.contourArea)
+        if c.shape[0] < 10:
+            return None, None
+        # contour points as Nx2
+        contour = c.reshape(-1,2)
+        # 1) DP-like sampling with Step and D
+        sampled = self._contour_sample_dp(contour, Step=Step, D=D)
+        if len(sampled) < 6:
+            return None, None
+        # 2) smoothing by segment adaptive quadratic Bezier (fast)
+        smooth = self._smooth_contour_bezier(sampled, seg_steps=5)
+        # 3) estimate fingertip candidates: extreme points (local maxima of distance from contour centroid)
+        cx,cy = np.mean(smooth, axis=0)
+        dists = np.linalg.norm(smooth - np.array([cx,cy]), axis=1)
+        tip_idx = int(np.argmax(dists))
+        tip_pt = tuple((smooth[tip_idx] + np.array([off_x, off_y])).astype(int))
+        # 4) extract local arc around tip along smooth contour
+        arc_radius = max(10, int(len(smooth)*0.06))
+        n = len(smooth)
+        arc_indices = [(tip_idx + i) % n for i in range(-arc_radius, arc_radius+1)]
+        arc_pts = smooth[arc_indices]
+        # 5) split arc into left/right halves relative to tip, fit lines via clustering by angle
+        mid = len(arc_pts)//2
+        left_pts = arc_pts[:mid]
+        right_pts = arc_pts[mid:]
+        if len(left_pts) < 3 or len(right_pts) < 3:
+            return tip_pt, None
+        L_line = self._line_from_points_least_squares(left_pts)
+        R_line = self._line_from_points_least_squares(right_pts)
+        if L_line is None or R_line is None:
+            return tip_pt, None
+        # compute direction bisector (image coordinates: x right, y down)
+        vL = np.array([L_line[0], L_line[1]])
+        vR = np.array([R_line[0], R_line[1]])
+        vLn = vL / (np.linalg.norm(vL)+1e-9)
+        vRn = vR / (np.linalg.norm(vR)+1e-9)
+        bis = vLn + vRn
+        if np.linalg.norm(bis) < 1e-6:
+            bis = vLn - vRn
+        bis = bis / (np.linalg.norm(bis)+1e-9)
+        # ensure bisector points away from hand centroid: if dot((tip-centroid),bis) <0 flip
+        vec_tip_cent = np.array(tip_pt) - np.array([cx+off_x, cy+off_y])
+        if np.dot(vec_tip_cent, bis) < 0:
+            bis = -bis
+        dir_vec = (float(bis[0]), float(bis[1]))
+        return tip_pt, dir_vec
+
+    def _contour_sample_dp(self, contour, Step=70, D=7):
+        """
+        Sample contour with step-wise max-deviation rule: for each segment of length Step, if max deviation < D choose endpoint, else choose deviation-max point.
+        contour: Nx2 numpy array
+        returns list of sampled points as Nx2 numpy array
+        """
+        n = len(contour)
+        if n == 0:
+            return np.array([])
+        sampled = []
+        i = 0
+        while i < n:
+            j = (i + Step) % n
+            # handle wrap properly by constructing segment point list
+            if i < j:
+                seg = contour[i:j+1]
+            else:
+                seg = np.vstack((contour[i:], contour[:j+1]))
+            p0 = seg[0]
+            p1 = seg[-1]
+            # line distance
+            if len(seg) <= 2:
+                chosen = p1
+            else:
+                # compute perpendicular distances
+                v = p1 - p0
+                vnorm = v / (np.linalg.norm(v)+1e-9)
+                rel = seg - p0
+                proj_len = np.dot(rel, vnorm)
+                proj = np.outer(proj_len, vnorm) + p0
+                dists = np.linalg.norm(seg - proj, axis=1)
+                idx_max = int(np.argmax(dists))
+                if dists[idx_max] < D:
+                    chosen = p1
+                else:
+                    chosen = seg[idx_max]
+            sampled.append(chosen)
+            i = (i + Step) % n
+            if len(sampled) > n:
+                break
+        sampled = np.array(sampled)
+        # ensure unique in order
+        # remove near-duplicates
+        out = [sampled[0]]
+        for p in sampled[1:]:
+            if np.linalg.norm(p - out[-1]) > 1.0:
+                out.append(p)
+        return np.array(out)
+
+    def _smooth_contour_bezier(self, pts, seg_steps=5):
+        """
+        Fast quadratic Bezier smoothing over consecutive triplets.
+        pts: Nx2 array of sampled contour points
+        seg_steps: samples per segment
+        returns Mx2 float array
+        """
+        if len(pts) < 3:
+            return pts.copy()
+        out = []
+        n = len(pts)
+        for i in range(n):
+            p0 = pts[i]
+            p1 = pts[(i+1)%n]
+            p2 = pts[(i+2)%n]
+            # control point for quadratic Bezier: approximate using p1
+            for t in np.linspace(0.0,1.0,seg_steps,endpoint=False):
+                b = (1-t)**2 * p0 + 2*(1-t)*t * p1 + t**2 * p2
+                out.append(b)
+        return np.array(out)
+
+    def _line_from_points_least_squares(self, pts):
+        """Fit line y = ax + b in least squares in parametric form; return unit direction (dx,dy) and a point on line (px,py).
+        pts: Nx2 array
+        returns (dx,dy,(px,py)) or None
+        """
+        if len(pts) < 2:
+            return None
+        pts = np.array(pts, dtype=float)
+        # centroid
+        cx,cy = pts.mean(axis=0)
+        # covariance
+        cov = np.cov(pts.T)
+        # principal component
+        w,v = np.linalg.eigh(cov)
+        idx = np.argmax(w)
+        dirv = v[:,idx]
+        if np.linalg.norm(dirv) < 1e-6:
+            return None
+        dirv = dirv / np.linalg.norm(dirv)
+        return (float(dirv[0]), float(dirv[1]), (float(cx), float(cy)))
+
 # helper
 def analyze_frame(frame, smooth_len=7):
     gr = GestureRecognizer(smooth_len=smooth_len)

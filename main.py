@@ -114,33 +114,50 @@ def main():
         hands = analysis['hands']
         dets = obj.detect(frameA) if obj is not None else []
         sel = choose_target_3d(hands, dets, depth_img, intrinsics) if use_ak else None
-        # compute ray intersection target if depth available and hand present
+        # compute ray intersection target if depth available
         target_pt = None
-        if use_ak and depth_img is not None and hands:
+        target_3d = None
+        tip_for_draw = None
+        if use_ak and depth_img is not None:
             try:
-                # first hand
-                h0 = hands[0]
-                tip_px = h0['pts'][8][:2]
-                base_px = h0['pts'][5][:2]
-                tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=3)
-                base_d = sample_depth(depth_img, base_px[0], base_px[1], win=3)
-                if tip_d and base_d:
-                    tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
-                    base_3d = pixel_to_point(base_d, base_px[0], base_px[1], intrinsics)
-                    if tip_3d and base_3d:
-                        dir_3d = (tip_3d[0]-base_3d[0], tip_3d[1]-base_3d[1], tip_3d[2]-base_3d[2])
-                        # cast ray starting slightly beyond tip (0.02m) to avoid immediate hit
-                        origin = tip_3d
-                        # call utility
-                        hit = None
-                        try:
+                # Prefer contour-based pointing (robust); falls back to landmark-based if needed
+                tip, dir_img = recognizer.detect_pointing_direction(frameA, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0)
+                if tip is not None and dir_img is not None:
+                    tip_px = (int(tip[0]), int(tip[1]))
+                    tip_for_draw = tip_px
+                    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=3)
+                    if tip_d and tip_d > 0:
+                        tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
+                        # approximate a far pixel along image direction (30 px) to derive 3D direction
+                        far_px = (tip_px[0] + dir_img[0]*30.0, tip_px[1] + dir_img[1]*30.0)
+                        far_3d = pixel_to_point(tip_d, far_px[0], far_px[1], intrinsics)
+                        if tip_3d is not None and far_3d is not None:
+                            dir_3d = (far_3d[0]-tip_3d[0], far_3d[1]-tip_3d[1], far_3d[2]-tip_3d[2])
                             from utils import ray_intersect_depth
-                            hit = ray_intersect_depth(origin, dir_3d, depth_img, intrinsics, z_step=0.02, z_max=3.0, thresh_mm=80)
-                        except Exception as e:
-                            logger.warning('ray intersect failed: %s', e)
-                        if hit is not None:
-                            hu, hv, hZ = hit
-                            target_pt = (int(round(hu)), int(round(hv)))
+                            hit = ray_intersect_depth(tip_3d, dir_3d, depth_img, intrinsics, z_step=0.01, z_max=3.0, thresh_mm=100)
+                            if hit is not None:
+                                hu, hv, hZ = hit
+                                target_pt = (int(round(hu)), int(round(hv)))
+                                target_3d = (hu, hv, hZ)
+                # fallback to landmark-based if no contour hit
+                if target_pt is None and hands:
+                    h0 = hands[0]
+                    tip_px = h0['pts'][8][:2]
+                    base_px = h0['pts'][5][:2]
+                    tip_for_draw = (int(tip_px[0]), int(tip_px[1]))
+                    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=3)
+                    base_d = sample_depth(depth_img, base_px[0], base_px[1], win=3)
+                    if tip_d and base_d:
+                        tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
+                        base_3d = pixel_to_point(base_d, base_px[0], base_px[1], intrinsics)
+                        if tip_3d and base_3d:
+                            dir_3d = (tip_3d[0]-base_3d[0], tip_3d[1]-base_3d[1], tip_3d[2]-base_3d[2])
+                            from utils import ray_intersect_depth
+                            hit = ray_intersect_depth(tip_3d, dir_3d, depth_img, intrinsics, z_step=0.02, z_max=3.0, thresh_mm=80)
+                            if hit is not None:
+                                hu, hv, hZ = hit
+                                target_pt = (int(round(hu)), int(round(hv)))
+                                target_3d = (hu, hv, hZ)
             except Exception as e:
                 logger.warning('target compute failed: %s', e)
 
@@ -167,9 +184,15 @@ def main():
         if target_pt is not None:
             try:
                 cv2.circle(fA, target_pt, 8, (0,0,255), -1)
-                # draw line from fingertip to target
-                tip = (int(hands[0]['pts'][8][0]), int(hands[0]['pts'][8][1]))
-                cv2.line(fA, tip, target_pt, (0,0,255), 2)
+                # draw line from fingertip to target (use contour or landmark tip if available)
+                if tip_for_draw is not None:
+                    tip_draw = (int(tip_for_draw[0]), int(tip_for_draw[1]))
+                elif hands:
+                    tip_draw = (int(hands[0]['pts'][8][0]), int(hands[0]['pts'][8][1]))
+                else:
+                    tip_draw = None
+                if tip_draw is not None:
+                    cv2.line(fA, tip_draw, target_pt, (0,0,255), 2)
             except Exception:
                 pass
         combined = cv2.hconcat([cv2.resize(fF, (640,480)), cv2.resize(fA, (640,480))])
