@@ -5,7 +5,7 @@ from hardware_camera import LocalCamera, AzureKinect, _HAS_K4A
 from hand_module import HandDetector, GestureRecognizer
 from face_module import FaceExpression
 from object_module import ObjectDetector
-from utils import bbox_center, angle_between, sample_depth, pixel_to_point
+from utils import bbox_center, angle_between, sample_depth, pixel_to_point, choose_target_2d
 
 
 # Logging to file to capture runtime messages
@@ -113,40 +113,54 @@ def main():
         analysis = recognizer.analyze(frameA)
         hands = analysis['hands']
         dets = obj.detect(frameA) if obj is not None else []
-        sel = choose_target_3d(hands, dets, depth_img, intrinsics) if use_ak else None
+        # 2D-selection: fast, depth-free target selection using index joint7->8
+        sel = choose_target_2d(hands, dets)
         # compute ray intersection target if depth available
         target_pt = None
         target_3d = None
         tip_for_draw = None
         if use_ak and depth_img is not None:
             try:
-                # Prefer contour-based pointing (robust); falls back to landmark-based if needed
-                tip, dir_img = recognizer.detect_pointing_direction(frameA, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0)
-                if tip is not None and dir_img is not None:
-                    tip_px = (int(tip[0]), int(tip[1]))
-                    tip_for_draw = tip_px
-                    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=3)
-                    if tip_d and tip_d > 0:
-                        tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
-                        # approximate a far pixel along image direction (30 px) to derive 3D direction
-                        far_px = (tip_px[0] + dir_img[0]*30.0, tip_px[1] + dir_img[1]*30.0)
-                        far_3d = pixel_to_point(tip_d, far_px[0], far_px[1], intrinsics)
-                        if tip_3d is not None and far_3d is not None:
-                            dir_3d = (far_3d[0]-tip_3d[0], far_3d[1]-tip_3d[1], far_3d[2]-tip_3d[2])
-                            from utils import ray_intersect_depth
-                            hit = ray_intersect_depth(tip_3d, dir_3d, depth_img, intrinsics, z_step=0.01, z_max=3.0, thresh_mm=100)
-                            if hit is not None:
-                                hu, hv, hZ = hit
-                                target_pt = (int(round(hu)), int(round(hv)))
-                                target_3d = (hu, hv, hZ)
-                # fallback to landmark-based if no contour hit
+                # Prefer new keypoint-based pointing (robust and efficient)
+                tip_3d_kp, dir_3d_kp = recognizer.detect_pointing_direction_keypoint(hands, depth_img, intrinsics, use_pca=False)
+                if tip_3d_kp is not None and dir_3d_kp is not None:
+                    from utils import ray_intersect_depth
+                    hit = ray_intersect_depth(tip_3d_kp, dir_3d_kp, depth_img, intrinsics, z_step=0.02, z_max=3.0, thresh_mm=80)
+                    if hit is not None:
+                        hu, hv, hZ = hit
+                        target_pt = (int(round(hu)), int(round(hv)))
+                        target_3d = (hu, hv, hZ)
+                        tip_for_draw = (int(round(tip_3d_kp[0]*1000 if tip_3d_kp[0] != 0 else 0)),
+                                       int(round(tip_3d_kp[1]*1000 if tip_3d_kp[1] != 0 else 0)))
+
+                # Fallback to contour-based pointing if keypoint method fails
+                if target_pt is None:
+                    tip, dir_img = recognizer.detect_pointing_direction(frameA, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0)
+                    if tip is not None and dir_img is not None:
+                        tip_px = (int(tip[0]), int(tip[1]))
+                        tip_for_draw = tip_px
+                        tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
+                        if tip_d and tip_d > 0:
+                            tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
+                            far_px = (tip_px[0] + dir_img[0]*30.0, tip_px[1] + dir_img[1]*30.0)
+                            far_3d = pixel_to_point(tip_d, far_px[0], far_px[1], intrinsics)
+                            if tip_3d is not None and far_3d is not None:
+                                dir_3d = (far_3d[0]-tip_3d[0], far_3d[1]-tip_3d[1], far_3d[2]-tip_3d[2])
+                                from utils import ray_intersect_depth
+                                hit = ray_intersect_depth(tip_3d, dir_3d, depth_img, intrinsics, z_step=0.01, z_max=3.0, thresh_mm=100)
+                                if hit is not None:
+                                    hu, hv, hZ = hit
+                                    target_pt = (int(round(hu)), int(round(hv)))
+                                    target_3d = (hu, hv, hZ)
+
+                # Final fallback to landmark-based 3D selection if target not found
                 if target_pt is None and hands:
                     h0 = hands[0]
                     tip_px = h0['pts'][8][:2]
                     base_px = h0['pts'][5][:2]
                     tip_for_draw = (int(tip_px[0]), int(tip_px[1]))
-                    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=3)
-                    base_d = sample_depth(depth_img, base_px[0], base_px[1], win=3)
+                    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
+                    base_d = sample_depth(depth_img, base_px[0], base_px[1], win=6)
                     if tip_d and base_d:
                         tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
                         base_3d = pixel_to_point(base_d, base_px[0], base_px[1], intrinsics)

@@ -18,8 +18,10 @@ yolov8*.pt
 run_err.txt
 run_log.txt
 run_stdout.txt
+request.md
 
 # 可选通用忽略
 .DS_Store
 *.log
 *.tmp
+

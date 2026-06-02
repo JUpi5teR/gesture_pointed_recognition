@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import collections
 import time
+import math
 import mediapipe as mp
 
 # Compatibility: use legacy mp.solutions if available, otherwise use MediaPipe Tasks API
@@ -24,7 +25,7 @@ if USE_LEGACY:
             h, w = image.shape[:2]
             for hand_landmarks in res.multi_hand_landmarks:
                 pts = [(int(lm.x*w), int(lm.y*h), getattr(lm,'z',0.0)) for lm in hand_landmarks.landmark]
-                hands.append({'pts': pts})
+                hands.append({'pts': pts, 'landmarks': hand_landmarks})
             return hands
 
 else:
@@ -82,12 +83,18 @@ class GestureRecognizer:
             except Exception:
                 self.aruco_params = None
         self.trackers = {}  # id -> tracker
+        self.prev_dir_vec = None
+        self.prev_tip_pos = None
+        self.keypoint_cache = collections.deque(maxlen=8)
+        self.current_landmarks = None
 
     def analyze(self, frame):
         hands_raw = self.detector.detect(frame)
         hands = []
         for hr in hands_raw:
             pts = hr['pts']
+            # Store landmarks for distance calculations
+            self.current_landmarks = hr.get('landmarks')
             fingers = self._finger_states(pts)
             code = self._encode_fingers(fingers)
             geom = self._geometry(pts)
@@ -97,12 +104,80 @@ class GestureRecognizer:
         ar = self._detect_aruco(frame)
         return {'hands': smoothed, 'aruco': ar}
 
+    def _get_signed_dist(self, point_indices):
+        """
+        Calculate signed euclidean distance between two landmark points.
+        point_indices: [idx1, idx2]
+        Returns distance * sign based on y-axis difference.
+        """
+        if not self.current_landmarks:
+            return 0
+        lm = self.current_landmarks.landmark
+        sign = -1
+        if lm[point_indices[0]].y < lm[point_indices[1]].y:
+            sign = 1
+        dx = lm[point_indices[0]].x - lm[point_indices[1]].x
+        dy = lm[point_indices[0]].y - lm[point_indices[1]].y
+        dist = math.sqrt(dx*dx + dy*dy)
+        return dist * sign
+
+    def _get_dist(self, point_indices):
+        """Calculate euclidean distance between two landmark points."""
+        if not self.current_landmarks:
+            return 0
+        lm = self.current_landmarks.landmark
+        dx = lm[point_indices[0]].x - lm[point_indices[1]].x
+        dy = lm[point_indices[0]].y - lm[point_indices[1]].y
+        return math.sqrt(dx*dx + dy*dy)
+
+    def _get_dz(self, point_indices):
+        """Calculate absolute z-axis difference between two landmark points."""
+        if not self.current_landmarks:
+            return 0
+        lm = self.current_landmarks.landmark
+        return abs(lm[point_indices[0]].z - lm[point_indices[1]].z)
+
     def _finger_states(self, pts):
-        tips = [4,8,12,16,20]
-        pips = [2,6,10,14,18]
+        """
+        Determine finger states based on distance ratios between keypoints.
+        Uses skeletal landmark ratios similar to Gesture_Controller approach.
+        Returns: dict with finger names as keys and open/closed states as boolean values.
+        """
+        tips = [4, 8, 12, 16, 20]
+        pips = [2, 6, 10, 14, 18]
+        mcps = [5, 9, 13, 17]
+
         states = {}
-        for name,t,p in zip(['thumb','index','middle','ring','pinky'], tips, pips):
-            states[name] = pts[t][1] < pts[p][1]
+        names = ['thumb', 'index', 'middle', 'ring', 'pinky']
+
+        # For thumb (tip 4, pip 2)
+        tip_thumb = np.array(pts[4][:2], dtype=float)
+        pip_thumb = np.array(pts[2][:2], dtype=float)
+        wrist = np.array(pts[0][:2], dtype=float)
+
+        thumb_dist_tip_pip = np.linalg.norm(tip_thumb - pip_thumb)
+        thumb_dist_pip_wrist = np.linalg.norm(pip_thumb - wrist)
+
+        try:
+            thumb_ratio = thumb_dist_tip_pip / (thumb_dist_pip_wrist + 1e-6)
+            states['thumb'] = thumb_ratio > 0.5
+        except:
+            states['thumb'] = False
+
+        # For other four fingers use landmark distance ratios
+        for i, (tip_idx, mcp_idx, pip_idx, name) in enumerate(
+            zip([8, 12, 16, 20], [5, 9, 13, 17], [6, 10, 14, 18], names[1:])
+        ):
+            try:
+                # Calculate signed distances like in Gesture_Controller
+                dist_tip_mcp = self._get_signed_dist([tip_idx, mcp_idx])
+                dist_mcp_pip = self._get_signed_dist([mcp_idx, pip_idx])
+
+                ratio = round(dist_tip_mcp / (dist_mcp_pip + 1e-6), 1)
+                states[name] = ratio > 0.5
+            except:
+                states[name] = False
+
         return states
 
     def _encode_fingers(self, states):
@@ -211,6 +286,96 @@ class GestureRecognizer:
             if d > 1000:
                 count += 1
         return count
+
+    def detect_pointing_direction_keypoint(self, hands, depth_img, intrinsics, use_pca=False):
+        """
+        Detect pointing direction using MediaPipe keypoints (8=tip, 5=MCP or 6=PIP).
+        Replaces contour-based method with direct keypoint vector calculation.
+        Returns (tip_3d, dir_3d) in 3D space (meters), or (None, None) if detection fails.
+        """
+        if not hands or depth_img is None or intrinsics is None:
+            return None, None
+
+        from utils import sample_depth, pixel_to_point
+
+        h = hands[0]
+        pts = h['pts']
+
+        tip_px = pts[8][:2]
+        mcp_px = pts[5][:2]
+
+        tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
+        mcp_d = sample_depth(depth_img, mcp_px[0], mcp_px[1], win=6)
+
+        if tip_d == 0 or mcp_d == 0:
+            return None, None
+
+        tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
+        mcp_3d = pixel_to_point(mcp_d, mcp_px[0], mcp_px[1], intrinsics)
+
+        if tip_3d is None or mcp_3d is None:
+            return None, None
+
+        dir_3d = np.array([tip_3d[0]-mcp_3d[0], tip_3d[1]-mcp_3d[1], tip_3d[2]-mcp_3d[2]], dtype=float)
+        dir_norm = np.linalg.norm(dir_3d)
+        if dir_norm < 1e-6:
+            return None, None
+        dir_3d = dir_3d / dir_norm
+
+        # Cache keypoints for PCA if enabled
+        if use_pca:
+            pip_px = pts[6][:2]
+            pip_d = sample_depth(depth_img, pip_px[0], pip_px[1], win=6)
+            if pip_d > 0:
+                pip_3d = pixel_to_point(pip_d, pip_px[0], pip_px[1], intrinsics)
+                if pip_3d:
+                    self.keypoint_cache.append((tip_3d, pip_3d, mcp_3d))
+
+        tip_pos_smoothed = tip_3d
+        dir_vec_smoothed = tuple(dir_3d)
+
+        # Apply exponential smoothing if previous state exists
+        if self.prev_tip_pos is not None:
+            alpha = 0.3
+            tip_pos_smoothed = tuple(
+                0.7 * self.prev_tip_pos[i] + 0.3 * tip_3d[i] for i in range(3)
+            )
+
+        if self.prev_dir_vec is not None:
+            alpha = 0.3
+            smoothed_dir = np.array(self.prev_dir_vec) * 0.7 + np.array(dir_3d) * 0.3
+            smoothed_dir = smoothed_dir / (np.linalg.norm(smoothed_dir) + 1e-9)
+            dir_vec_smoothed = tuple(smoothed_dir)
+
+        self.prev_tip_pos = tip_pos_smoothed
+        self.prev_dir_vec = dir_vec_smoothed
+
+        return tip_pos_smoothed, dir_vec_smoothed
+
+    def fit_3d_line_pca(self):
+        """
+        Fit a 3D line through cached keypoints using PCA.
+        Returns (origin, direction) tuple or (None, None) if insufficient data.
+        """
+        if len(self.keypoint_cache) < 5:
+            return None, None
+
+        all_pts = []
+        for tip, pip, mcp in self.keypoint_cache:
+            all_pts.append(tip)
+            all_pts.append(pip)
+            all_pts.append(mcp)
+
+        pts_array = np.array(all_pts, dtype=float)
+        centroid = pts_array.mean(axis=0)
+
+        cov = np.cov(pts_array.T)
+        w, v = np.linalg.eigh(cov)
+        idx = np.argmax(w)
+        direction = v[:, idx]
+        direction = direction / (np.linalg.norm(direction) + 1e-9)
+
+        return tuple(centroid), tuple(direction)
 
     def detect_pointing_direction(self, frame, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0):
         """
