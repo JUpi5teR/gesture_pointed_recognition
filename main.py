@@ -114,6 +114,36 @@ def main():
         hands = analysis['hands']
         dets = obj.detect(frameA) if obj is not None else []
         sel = choose_target_3d(hands, dets, depth_img, intrinsics) if use_ak else None
+        # compute ray intersection target if depth available and hand present
+        target_pt = None
+        if use_ak and depth_img is not None and hands:
+            try:
+                # first hand
+                h0 = hands[0]
+                tip_px = h0['pts'][8][:2]
+                base_px = h0['pts'][5][:2]
+                tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=3)
+                base_d = sample_depth(depth_img, base_px[0], base_px[1], win=3)
+                if tip_d and base_d:
+                    tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
+                    base_3d = pixel_to_point(base_d, base_px[0], base_px[1], intrinsics)
+                    if tip_3d and base_3d:
+                        dir_3d = (tip_3d[0]-base_3d[0], tip_3d[1]-base_3d[1], tip_3d[2]-base_3d[2])
+                        # cast ray starting slightly beyond tip (0.02m) to avoid immediate hit
+                        origin = tip_3d
+                        # call utility
+                        hit = None
+                        try:
+                            from utils import ray_intersect_depth
+                            hit = ray_intersect_depth(origin, dir_3d, depth_img, intrinsics, z_step=0.02, z_max=3.0, thresh_mm=80)
+                        except Exception as e:
+                            logger.warning('ray intersect failed: %s', e)
+                        if hit is not None:
+                            hu, hv, hZ = hit
+                            target_pt = (int(round(hu)), int(round(hv)))
+            except Exception as e:
+                logger.warning('target compute failed: %s', e)
+
         # normalize frames for display
         def _norm_frame(f):
             import numpy as _np
@@ -133,6 +163,15 @@ def main():
         fA = _norm_frame(frameA)
         draw_info(fF, face_expr, [], [], None)
         draw_info(fA, None, hands, dets, sel)
+        # draw target if found
+        if target_pt is not None:
+            try:
+                cv2.circle(fA, target_pt, 8, (0,0,255), -1)
+                # draw line from fingertip to target
+                tip = (int(hands[0]['pts'][8][0]), int(hands[0]['pts'][8][1]))
+                cv2.line(fA, tip, target_pt, (0,0,255), 2)
+            except Exception:
+                pass
         combined = cv2.hconcat([cv2.resize(fF, (640,480)), cv2.resize(fA, (640,480))])
         cv2.imshow('F (face) | A (user view)', combined)
         if cv2.waitKey(1) & 0xFF == 27:

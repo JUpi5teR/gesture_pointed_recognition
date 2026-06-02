@@ -44,7 +44,10 @@ else:
             from mediapipe.tasks.python.vision.core.image import Image as MpImage, ImageFormat
             arr = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             padded, pad_left, pad_top, pad_w, pad_h, orig_w, orig_h = pad_to_square(arr)
-            mp_image = MpImage(ImageFormat.SRGB, padded)
+            try:
+                mp_image = MpImage(ImageFormat.SRGB, padded, padded.shape[1], padded.shape[0])
+            except TypeError:
+                mp_image = MpImage(ImageFormat.SRGB, padded)
             result = self.detector.detect(mp_image)
             hands = []
             if not result.hand_landmarks:
