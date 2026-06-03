@@ -1,5 +1,15 @@
-import math
+﻿import math
 import numpy as np
+from enum import Enum
+
+
+class SystemState(Enum):
+    """State machine states for the hand-target-track-shake workflow."""
+    IDLE = "IDLE"                # Free fingertip pointing and target selection
+    DWELL_WAIT = "DWELL_WAIT"    # Target in region, counting dwell time
+    TRACKING = "TRACKING"        # Object visual tracking active
+    UNLOCKING = "UNLOCKING"      # Shake detected, releasing lock (transient)
+
 
 def bbox_center(box):
     x1,y1,x2,y2 = box
@@ -154,84 +164,51 @@ def ray_intersect_depth(origin_3d, dir_3d, depth_img, intrinsics, z_step=0.02, z
             continue
         u = fx * X / Z + cx
         v = fy * Y / Z + cy
-        ui = int(round(u)); vi = int(round(v))
-        if ui < 0 or ui >= w or vi < 0 or vi >= h:
+        if u < 0 or u >= w or v < 0 or v >= h:
             z += z_step
             continue
-        depth_mm = sample_depth(depth_img, ui, vi, win=2)
-        if depth_mm == 0:
-            z += z_step
-            continue
-        if abs(depth_mm/1000.0 - Z) <= (thresh_mm/1000.0):
-            return (u, v, Z)
+        depth_mm = sample_depth(depth_img, u, v, win=2)
+        if depth_mm > 0:
+            Z_mm = Z * 1000.0
+            if abs(depth_mm - Z_mm) <= thresh_mm * 0.5:
+                return (u, v, Z)
         z += z_step
-    return None
+
+    # Fallback: use best sparse candidate
+    best = min(candidates, key=lambda c: c[0])
+    return (best[1], best[2], best[3])
 
 
-def choose_target_2d(hands, dets, alpha=0.6, angle_thresh_deg=30.0, dist_coeff=1.0):
+def choose_target_2d(hands, dets, angle_thresh_deg=30.0, dist_coeff=1.0):
+    """Select detection closest to index finger pointing direction in 2D.
+    Returns detection index or None.
     """
-    Fast 2D selection using index joint7->8 ray and YOLO detections as priors.
-    - hands: list with hand dicts containing 'pts' (list of (x,y,...) tuples)
-    - dets: list of detections with 'box' = (x1,y1,x2,y2)
-    Returns selected detection index or None.
-    Stateful low-pass filter stored as choose_target_2d.last_dir (numpy array).
-    """
-    import math
-    import numpy as np
     if not hands or not dets:
         return None
-    h = hands[0]
-    try:
-        p7 = h['pts'][7]
-        p8 = h['pts'][8]
-        tip = np.array([float(p8[0]), float(p8[1])], dtype=float)
-        base = np.array([float(p7[0]), float(p7[1])], dtype=float)
-    except Exception:
+    h0 = hands[0]
+    pts = h0['pts']
+    tip = np.array(pts[8][:2], dtype=float)
+    base = np.array(pts[5][:2], dtype=float)
+    dir_vec = tip - base
+    if np.linalg.norm(dir_vec) < 1e-3:
         return None
-    v = tip - base
-    norm = np.linalg.norm(v)
-    if norm < 1e-6:
-        return None
-    dirv = v / norm
-    # one-pole low-pass filter (store state on function)
-    last = getattr(choose_target_2d, 'last_dir', None)
-    if last is None:
-        filt = dirv
-    else:
-        filt = alpha * last + (1.0 - alpha) * dirv
-        fn = np.linalg.norm(filt)
-        if fn > 1e-6:
-            filt = filt / fn
-        else:
-            filt = dirv
-    choose_target_2d.last_dir = filt
-
+    dir_vec = dir_vec / np.linalg.norm(dir_vec)
     best_j = None
-    best_score = -1.0
+    best_score = 0.0
     for j, det in enumerate(dets):
-        try:
-            x1,y1,x2,y2 = det['box']
-        except Exception:
-            continue
-        cx = (x1 + x2) / 2.0
-        cy = (y1 + y2) / 2.0
-        vec = np.array([cx, cy], dtype=float) - tip
-        proj = np.dot(vec, filt)
-        # only consider objects roughly in front of finger (positive projection)
-        if proj <= 0:
-            continue
+        cx, cy = bbox_center(det['box'])
+        vec = np.array([cx - tip[0], cy - tip[1]], dtype=float)
         dist = np.linalg.norm(vec)
-        if dist < 1e-6:
-            dist = 1e-6
-        u = vec / dist
-        # angle score (cosine), require within threshold
-        angle_cos = float(np.dot(u, filt))
+        if dist < 1.0:
+            continue
+        filt = vec / dist
+        angle_cos = float(np.dot(dir_vec, filt))
         angle_cos = max(-1.0, min(1.0, angle_cos))
         angle_deg = math.degrees(math.acos(angle_cos))
         if angle_deg > angle_thresh_deg:
             continue
-        # perpendicular pixel distance from ray to center
         perp = abs(filt[0] * vec[1] - filt[1] * vec[0])
+        x1, y1, x2, y2 = det['box']
         bw = max(1.0, abs(x2 - x1))
         bh = max(1.0, abs(y2 - y1))
         diag = math.hypot(bw, bh)
@@ -276,7 +253,7 @@ def compute_target_expectation(target_points, window_size=10):
     # Compute std dev for outlier filtering
     std = np.std(points_arr, axis=0)
 
-    # Filter outliers: points within mean ± 2*std
+    # Filter outliers: points within mean +/- 2*std
     if std[0] > 0 and std[1] > 0:
         mask = (
             (np.abs(points_arr[:, 0] - mean[0]) <= 2.0 * std[0]) &
@@ -292,12 +269,13 @@ def compute_target_expectation(target_points, window_size=10):
 class TargetDwellTracker:
     """
     Track how long target point dwells in each detection region.
+    Dwell threshold default = 120 frames (4 seconds at 30fps).
     """
-    def __init__(self, dwell_threshold_frames=90, fps=30):  # 90 frames = 3 seconds at 30fps
+    def __init__(self, dwell_threshold_frames=120, fps=30):
         self.dwell_threshold_frames = dwell_threshold_frames
         self.fps = fps
-        self.region_dwell = {}  # box_id -> frame count
-        self.region_points = {}  # box_id -> list of target points
+        self.region_dwell = {}      # box_id -> frame count
+        self.region_points = {}     # box_id -> list of target points
         self.locked_target = None
         self.locked_box = None
         self.is_locked = False
@@ -321,16 +299,14 @@ class TargetDwellTracker:
                 current_det_idx = i
                 break
 
-        # Reset all counters and collect points for current detection
+        # Reset counters for other detections, increment current
         for i in range(len(dets)):
             if i == current_det_idx:
-                # Increment dwell time for current detection
                 self.region_dwell[i] = self.region_dwell.get(i, 0) + 1
                 if i not in self.region_points:
                     self.region_points[i] = []
                 self.region_points[i].append(target_pt)
             else:
-                # Reset other detections
                 if i in self.region_dwell:
                     del self.region_dwell[i]
                 if i in self.region_points:
@@ -339,13 +315,19 @@ class TargetDwellTracker:
         # Check if any detection exceeded dwell threshold
         for i, dwell_count in self.region_dwell.items():
             if dwell_count >= self.dwell_threshold_frames and not self.is_locked:
-                # Lock target at the point with highest dwell in this region
                 self.locked_target = compute_target_expectation(self.region_points[i], window_size=20)
                 self.locked_box = tuple(dets[i]['box'])
                 self.is_locked = True
                 return self.locked_target, self.locked_box
 
         return self.locked_target, self.locked_box
+
+    def get_dwell_progress(self):
+        """Get current dwell progress as a fraction (0.0 to 1.0)."""
+        if not self.region_dwell:
+            return 0.0
+        max_dwell = max(self.region_dwell.values())
+        return min(1.0, max_dwell / self.dwell_threshold_frames)
 
     def reset(self):
         """Reset tracking state (called when shake detected)."""

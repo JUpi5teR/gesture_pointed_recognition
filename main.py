@@ -1,16 +1,18 @@
-import cv2
+﻿import cv2
 import time
 import logging
-import collections
+import numpy as np
 from hardware_camera import LocalCamera, AzureKinect, _HAS_K4A
 from hand_module import HandDetector, GestureRecognizer
 from face_module import FaceExpression
 from object_module import ObjectDetector
-from face_gesture import FaceGestureRecognizer
+from face_gesture import HeadGestureRecognizer
+from pose_module import PoseDetector
 from kalman_tracker import TargetTracker
 from background_model import BackgroundModel
-from utils import bbox_center, angle_between, sample_depth, pixel_to_point, choose_target_2d, point_in_box, compute_target_expectation, TargetDwellTracker
-
+from utils import (bbox_center, angle_between, sample_depth, pixel_to_point,
+                   choose_target_2d, point_in_box, compute_target_expectation,
+                   TargetDwellTracker, SystemState)
 
 # Logging to file to capture runtime messages
 _log_path = r"e:\Code\CV_lab\my_homework\run_log.txt"
@@ -18,90 +20,121 @@ logging.basicConfig(filename=_log_path, level=logging.INFO, format='%(asctime)s 
 logger = logging.getLogger(__name__)
 logger.info('main.py started')
 
-# Use AzureKinect if available to get aligned depth; otherwise fallback to second webcam (no depth).
 
-def draw_info(frame, face_expr, face_pts, hands, dets, selected_idx, target_pt=None, tracking_mode=False):
-    """Draw information on frame. Show face landmarks, hands, and objects when target overlaps."""
-    if face_expr:
-        status = "TRACKING" if tracking_mode else "IDLE"
-        cv2.putText(frame, f'Face: {face_expr} | {status}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0),2)
+def draw_skeleton(frame, pose_pts):
+    """Draw pose skeleton connections on frame.
+    Key landmarks: 0=nose, 11=left shoulder, 12=right shoulder.
+    """
+    if pose_pts is None or len(pose_pts) < 13:
+        return
+    # Draw key points
+    key_indices = [0, 11, 12]
+    key_colors = [(0, 255, 255), (255, 165, 0), (255, 165, 0)]
+    key_names = ['Nose', 'LShldr', 'RShldr']
+    for idx, color, name in zip(key_indices, key_colors, key_names):
+        x, y = int(pose_pts[idx][0]), int(pose_pts[idx][1])
+        cv2.circle(frame, (x, y), 5, color, -1)
+        cv2.putText(frame, name, (x + 6, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
-    # Draw face landmarks
-    if face_pts is not None and len(face_pts) > 0:
-        # Key points to display: nose (1), left shoulder (11), right shoulder (12)
-        key_indices = [1, 11, 12]
-        key_names = ['Nose', 'LShoulder', 'RShoulder']
-        for idx, name in zip(key_indices, key_names):
-            if idx < len(face_pts):
-                x, y = face_pts[idx]
-                cv2.circle(frame, (int(x), int(y)), 4, (0, 255, 255), -1)
-                cv2.putText(frame, name, (int(x)+5, int(y)-5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+    # Draw shoulder line
+    ls = (int(pose_pts[11][0]), int(pose_pts[11][1]))
+    rs = (int(pose_pts[12][0]), int(pose_pts[12][1]))
+    nose_pt = (int(pose_pts[0][0]), int(pose_pts[0][1]))
+    cv2.line(frame, ls, rs, (255, 165, 0), 2)
+    # Draw neck line (shoulder center -> nose)
+    sc = ((ls[0] + rs[0]) // 2, (ls[1] + rs[1]) // 2)
+    cv2.line(frame, sc, nose_pt, (0, 255, 255), 2)
 
-    # Draw hand landmarks
+
+def draw_info(frame, state, head_gesture, hands, dets, target_pt, tracked_box, dwell_progress):
+    """Draw comprehensive HUD information on frame."""
+    # --- State indicator (top-left) ---
+    state_colors = {
+        SystemState.IDLE: (0, 255, 0),
+        SystemState.DWELL_WAIT: (0, 255, 255),
+        SystemState.TRACKING: (0, 0, 255),
+        SystemState.UNLOCKING: (255, 0, 255),
+    }
+    state_labels = {
+        SystemState.IDLE: "IDLE - Free Pointing",
+        SystemState.DWELL_WAIT: "DWELL_WAIT - Counting",
+        SystemState.TRACKING: "TRACKING - Object Lock",
+        SystemState.UNLOCKING: "UNLOCKING - Releasing",
+    }
+    color = state_colors.get(state, (255, 255, 255))
+    cv2.putText(frame, f"State: {state_labels.get(state, str(state))}",
+                (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+    # --- Head gesture counts (top-left, below state) ---
+    if head_gesture is not None:
+        pitch_str = f"Pitch:{head_gesture['pitch']:.1f}" if head_gesture['pitch'] is not None else "Pitch:N/A"
+        yaw_str = f"Yaw:{head_gesture['yaw']:.1f}" if head_gesture['yaw'] is not None else "Yaw:N/A"
+        cv2.putText(frame, f"Nod:{head_gesture['nod_count']}  Shake:{head_gesture['shake_count']}",
+                    (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        cv2.putText(frame, f"{pitch_str}  {yaw_str}",
+                    (10, 72), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+        nd = head_gesture.get('nod_down', False)
+        sl = head_gesture.get('shake_left', False)
+        cv2.putText(frame, f"nod_down:{nd} shake_left:{sl}",
+                    (10, 92), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1)
+
+    # --- Dwell progress bar ---
+    if state == SystemState.DWELL_WAIT and dwell_progress > 0:
+        bar_w = 200
+        bar_h = 16
+        bar_x, bar_y = 10, 105
+        cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (80, 80, 80), -1)
+        fill_w = int(bar_w * dwell_progress)
+        cv2.rectangle(frame, (bar_x, bar_y), (bar_x + fill_w, bar_y + bar_h), (0, 255, 255), -1)
+        cv2.putText(frame, f"{dwell_progress*100:.0f}%", (bar_x + bar_w + 5, bar_y + 13),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+
+    # --- Hand landmarks ---
     for i, hand in enumerate(hands):
         for idx, p in enumerate(hand['pts']):
-            cv2.circle(frame, (p[0], p[1]), 2, (255,0,0), -1)
+            cv2.circle(frame, (p[0], p[1]), 2, (255, 0, 0), -1)
         st = hand['fingers']
-        cv2.putText(frame, f"Hand{i} idx_ext:{st['index']}", (10,40+20*i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255),1)
+        cv2.putText(frame, f"Hand{i} idx:{st['index']}", (10, 130 + 20 * i),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
-    # Only show detections if target_pt is inside them
+    # --- Detections and tracking box ---
     for j, d in enumerate(dets):
-        x1,y1,x2,y2 = d['box']
+        x1, y1, x2, y2 = d['box']
         show_det = False
-
-        # If tracking and target_pt is in this box, show it
-        if tracking_mode and target_pt is not None:
+        if state in (SystemState.TRACKING, SystemState.UNLOCKING) and target_pt is not None:
             if point_in_box(target_pt, (x1, y1, x2, y2)):
                 show_det = True
+        elif state in (SystemState.IDLE, SystemState.DWELL_WAIT):
+            show_det = True
 
         if show_det:
-            color = (0, 0, 255)  # Red for tracked
-            cv2.rectangle(frame, (x1,y1),(x2,y2), color, 3)
-            cv2.putText(frame, f"{d['label']}:{d['conf']:.2f}", (x1,y1-6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            if tracked_box is not None and tuple(d['box']) == tuple(tracked_box):
+                color = (0, 0, 255)
+                thickness = 3
+            else:
+                color = (0, 200, 0)
+                thickness = 1
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+            cv2.putText(frame, f"{d['label']}:{d['conf']:.2f}", (x1, y1 - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-
-def choose_target_3d(hands, dets, depth_img, intrinsics):
-    """Choose detection by comparing 3D direction from index finger to detection centers.
-    Returns index of selected detection or None.
-    """
-    if not hands or not dets or depth_img is None:
-        return None
-    h = hands[0]
-    tip_px = h['pts'][8][:2]
-    base_px = h['pts'][5][:2]
-    # get depths
-    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=4)
-    base_d = sample_depth(depth_img, base_px[0], base_px[1], win=4)
-    if tip_d == 0 or base_d == 0:
-        return None
-    tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
-    base_3d = pixel_to_point(base_d, base_px[0], base_px[1], intrinsics)
-    if tip_3d is None or base_3d is None:
-        return None
-    dir_3d = (tip_3d[0]-base_3d[0], tip_3d[1]-base_3d[1], tip_3d[2]-base_3d[2])
-    best_j = None
-    best_ang = 180.0
-    for j,d in enumerate(dets):
-        cx, cy = bbox_center(d['box'])
-        c_d = sample_depth(depth_img, cx, cy, win=4)
-        if c_d == 0:
-            continue
-        c_3d = pixel_to_point(c_d, cx, cy, intrinsics)
-        if c_3d is None:
-            continue
-        vec = (c_3d[0]-tip_3d[0], c_3d[1]-tip_3d[1], c_3d[2]-tip_3d[2])
-        ang = angle_between(dir_3d, vec)
-        if ang < best_ang:
-            best_ang = ang
-            best_j = j
-    if best_ang < 25.0:
-        return best_j
-    return None
+    # --- Target point ---
+    if target_pt is not None:
+        try:
+            if state == SystemState.TRACKING:
+                cv2.circle(frame, target_pt, 10, (0, 0, 255), -1)
+                cv2.circle(frame, target_pt, 14, (0, 0, 255), 2)
+            elif state == SystemState.DWELL_WAIT:
+                cv2.circle(frame, target_pt, 8, (0, 255, 255), -1)
+            else:
+                cv2.circle(frame, target_pt, 6, (0, 255, 0), -1)
+        except Exception:
+            pass
 
 
 def main():
+    # --- Camera setup ---
     capF = LocalCamera(0)
-    # A-view: try AzureKinect first
     depth_img = None
     intrinsics = None
     if _HAS_K4A:
@@ -117,181 +150,228 @@ def main():
         use_ak = False
         capA = LocalCamera(1)
 
+    # --- Module initialization ---
     face = FaceExpression()
     recognizer = GestureRecognizer()
-    # legacy direct detector also available as recognizer.detector
     try:
         obj = ObjectDetector()
     except Exception as e:
-            logger.warning('Object detector init failed: %s', e)
-            obj = None
-
-    # Initialize new modules for face gesture recognition, tracking, and background modeling
-    face_gesture = FaceGestureRecognizer(history_len=15, shake_threshold=0.25)
+        logger.error('ObjectDetector init failed: %s', e)
+        obj = None
+    pose_detector = PoseDetector()
+    head_gesture_rec = HeadGestureRecognizer()
     target_tracker = TargetTracker()
-    bg_model = BackgroundModel(roi_pad=30)
-    dwell_tracker = TargetDwellTracker(dwell_threshold_frames=90)  # 3 seconds at 30fps
+    bg_model = BackgroundModel()
+    dwell_tracker = TargetDwellTracker(dwell_threshold_frames=120)  # 4 seconds at 30fps
 
-    # State machine: IDLE (normal pointing) or TRACKING (locked target)
-    tracking_state = 'IDLE'
+    # --- State machine ---
+    state = SystemState.IDLE
+    target_pt = None
+    target_3d = None
     tracked_object_box = None
-    target_point_history = collections.deque(maxlen=10)
+    prev_shake_count = 0
+    prev_nod_count = 0
+
+    logger.info('Main loop started')
 
     while True:
-        okF, frameF = capF.read()
+        # --- Read frames ---
+        retF, frameF = capF.read()
+        if not retF or frameF is None:
+            time.sleep(0.01)
+            continue
+        frameA = None
+        depth_img = None
         if use_ak:
-            okA, (frameA, depth_img) = ak.read()
+            retA, (frameA_color, depth_a) = ak.read()
+            if retA and frameA_color is not None:
+                frameA = frameA_color
+                depth_img = depth_a
+            else:
+                frameA = np.zeros_like(frameF)
         else:
-            okA, frameA = capA.read()
-            depth_img = None
-        if not okF or not okA:
-            logger.error('Camera read failed')
-            break
+            retA, frameA = capA.read()
+            if not retA or frameA is None:
+                frameA = np.zeros_like(frameF)
 
-        # Detect face expression and get facial landmarks
+        # --- Face expression (F camera) ---
         face_expr, face_pts = face.detect(frameF)
 
-        # Detect face gestures (shake only)
-        gesture = face_gesture.detect(face_pts)
+        # --- Pose detection (F camera) for head gesture ---
+        pose_pts = pose_detector.detect(frameF)
+        head_result = head_gesture_rec.update(pose_pts)
 
-        # Check for shake to exit tracking
-        if gesture == 'shake_detected' and tracking_state == 'TRACKING':
-            # Exit tracking mode
-            tracking_state = 'IDLE'
-            bg_model.reset()
-            target_tracker.reset()
-            dwell_tracker.reset()
-            target_point_history.clear()
-            logger.info('Tracking exited (shake detected)')
+        # --- Hand detection (A camera) ---
+        hand_result = recognizer.analyze(frameA)
+        hands = hand_result['hands']
 
-        # Hand gesture and object detection
-        analysis = recognizer.analyze(frameA)
-        hands = analysis['hands']
-        dets = obj.detect(frameA) if obj is not None else []
-
-        # 2D-selection: fast, depth-free target selection using index joint7->8
-        sel = choose_target_2d(hands, dets)
-
-        # Compute ray intersection target if depth available
-        target_pt = None
-        target_3d = None
-        tip_for_draw = None
-        if use_ak and depth_img is not None:
+        # --- Object detection (A camera) ---
+        dets = []
+        if obj is not None:
             try:
-                # Prefer new keypoint-based pointing (robust and efficient)
-                tip_3d_kp, dir_3d_kp = recognizer.detect_pointing_direction_keypoint(hands, depth_img, intrinsics, use_pca=False)
-                if tip_3d_kp is not None and dir_3d_kp is not None:
-                    from utils import ray_intersect_depth
-                    hit = ray_intersect_depth(tip_3d_kp, dir_3d_kp, depth_img, intrinsics, z_step=0.02, z_max=3.0, thresh_mm=80)
-                    if hit is not None:
-                        hu, hv, hZ = hit
-                        target_pt = (int(round(hu)), int(round(hv)))
-                        target_3d = (hu, hv, hZ)
-
-                # Fallback to contour-based pointing if keypoint method fails
-                if target_pt is None:
-                    tip, dir_img = recognizer.detect_pointing_direction(frameA, roi=None, D=7, Step=70, alpha0=30.0, beta0=20.0, theta0=30.0)
-                    if tip is not None and dir_img is not None:
-                        tip_px = (int(tip[0]), int(tip[1]))
-                        tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
-                        if tip_d and tip_d > 0:
-                            tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
-                            far_px = (tip_px[0] + dir_img[0]*30.0, tip_px[1] + dir_img[1]*30.0)
-                            far_3d = pixel_to_point(tip_d, far_px[0], far_px[1], intrinsics)
-                            if tip_3d is not None and far_3d is not None:
-                                dir_3d = (far_3d[0]-tip_3d[0], far_3d[1]-tip_3d[1], far_3d[2]-tip_3d[2])
-                                from utils import ray_intersect_depth
-                                hit = ray_intersect_depth(tip_3d, dir_3d, depth_img, intrinsics, z_step=0.01, z_max=3.0, thresh_mm=100)
-                                if hit is not None:
-                                    hu, hv, hZ = hit
-                                    target_pt = (int(round(hu)), int(round(hv)))
-                                    target_3d = (hu, hv, hZ)
-
-                # Final fallback to landmark-based 3D selection if target not found
-                if target_pt is None and hands:
-                    h0 = hands[0]
-                    tip_px = h0['pts'][8][:2]
-                    base_px = h0['pts'][5][:2]
-                    tip_d = sample_depth(depth_img, tip_px[0], tip_px[1], win=6)
-                    base_d = sample_depth(depth_img, base_px[0], base_px[1], win=6)
-                    if tip_d and base_d:
-                        tip_3d = pixel_to_point(tip_d, tip_px[0], tip_px[1], intrinsics)
-                        base_3d = pixel_to_point(base_d, base_px[0], base_px[1], intrinsics)
-                        if tip_3d and base_3d:
-                            dir_3d = (tip_3d[0]-base_3d[0], tip_3d[1]-base_3d[1], tip_3d[2]-base_3d[2])
-                            from utils import ray_intersect_depth
-                            hit = ray_intersect_depth(tip_3d, dir_3d, depth_img, intrinsics, z_step=0.02, z_max=3.0, thresh_mm=80)
-                            if hit is not None:
-                                hu, hv, hZ = hit
-                                target_pt = (int(round(hu)), int(round(hv)))
-                                target_3d = (hu, hv, hZ)
+                dets = obj.detect(frameA)
             except Exception as e:
-                logger.warning('target compute failed: %s', e)
+                logger.warning('Object detection failed: %s', e)
 
-        # Time-based target locking: check dwell time in regions
-        if tracking_state == 'IDLE':
+        # --- Compute fingertip target point (only in IDLE / DWELL_WAIT) ---
+        if state in (SystemState.IDLE, SystemState.DWELL_WAIT):
+            target_pt = None
+            target_3d = None
+            sel = choose_target_2d(hands, dets)
+            if sel is not None:
+                cx, cy = bbox_center(dets[sel]['box'])
+                target_pt = (int(cx), int(cy))
+            elif hands:
+                h0 = hands[0]
+                tip_px = h0['pts'][8][:2]
+                target_pt = (int(tip_px[0]), int(tip_px[1]))
+
+        # =====================================================================
+        # STATE MACHINE
+        # =====================================================================
+        dwell_progress = dwell_tracker.get_dwell_progress() if state == SystemState.DWELL_WAIT else 0.0
+
+        if state == SystemState.IDLE:
+            """Free pointing mode. Detect fingertip, transition to DWELL_WAIT if target in region."""
+            if target_pt is not None and dets:
+                # Check if target is inside any detection region
+                in_region = False
+                for det in dets:
+                    if point_in_box(target_pt, det['box']):
+                        in_region = True
+                        break
+                if in_region:
+                    state = SystemState.DWELL_WAIT
+                    logger.info('IDLE -> DWELL_WAIT: target entered detection region')
+
+        elif state == SystemState.DWELL_WAIT:
+            """Target in region, counting dwell time. Check for lock or return to IDLE."""
             locked_pt, locked_box = dwell_tracker.update(target_pt, dets)
+            dwell_progress = dwell_tracker.get_dwell_progress()
+
             if locked_pt is not None and locked_box is not None:
-                # Target locked after dwelling 3 seconds in a region
-                tracking_state = 'TRACKING'
-                target_tracker.initialize(locked_pt, locked_box)
-                bg_model.initialize(frameA)
+                # Target locked after 4s dwell -> freeze and start tracking
                 target_pt = locked_pt
                 tracked_object_box = locked_box
-                logger.info('Target locked at %s after 3s dwell', locked_pt)
-        else:
-            # In TRACKING mode, dwell tracker stays inactive
-            dwell_tracker._reset_all()
+                target_tracker.initialize(locked_pt, locked_box)
+                bg_model.initialize(frameA)
+                state = SystemState.TRACKING
+                # Reset head gesture counters when entering tracking
+                head_gesture_rec.reset()
+                prev_shake_count = 0
+                logger.info('DWELL_WAIT -> TRACKING: target locked at %s after 4s dwell', locked_pt)
+            elif target_pt is None or not dets:
+                # Target left all regions -> back to IDLE
+                dwell_tracker.reset()
+                state = SystemState.IDLE
+                logger.info('DWELL_WAIT -> IDLE: target left region')
+            else:
+                # Check if target still in any region
+                still_in = False
+                for det in dets:
+                    if point_in_box(target_pt, det['box']):
+                        still_in = True
+                        break
+                if not still_in:
+                    dwell_tracker.reset()
+                    state = SystemState.IDLE
+                    logger.info('DWELL_WAIT -> IDLE: target left region')
 
-        # Update tracking if in TRACKING mode
-        if tracking_state == 'TRACKING' and target_pt is not None:
-            # Find object containing target point
-            for det in dets:
-                box = det['box']
-                if point_in_box(target_pt, box):
-                    tracked_object_box = box
-                    # Use Kalman filter to smooth tracking
-                    tracked_pt, tracked_box = target_tracker.track(target_pt, box)
-                    target_pt = tuple(int(x) for x in tracked_pt[:2])
-                    tracked_object_box = tuple(int(x) for x in tracked_box)
-                    break
+        elif state == SystemState.TRACKING:
+            """Object tracking active. Monitor for head shake to unlock."""
+            # Update tracking: find object containing target point
+            if target_pt is not None:
+                found = False
+                for det in dets:
+                    box = det['box']
+                    if point_in_box(target_pt, box):
+                        tracked_pt, tracked_box = target_tracker.track(target_pt, box)
+                        target_pt = tuple(int(x) for x in tracked_pt[:2])
+                        tracked_object_box = tuple(int(x) for x in tracked_box)
+                        found = True
+                        break
+                if not found and dets:
+                    # Target lost in current detections, use tracker prediction
+                    pred_pt, pred_box = target_tracker.predict(), target_tracker.box_tracker.predict()
+                    target_pt = tuple(int(x) for x in pred_pt[:2])
+                    tracked_object_box = tuple(int(x) for x in pred_box)
 
-        # normalize frames for display
+            # Check for head shake
+            current_shake = head_result['shake_count']
+            if current_shake > prev_shake_count:
+                prev_shake_count = current_shake
+                # Shake detected -> unlock
+                state = SystemState.UNLOCKING
+                logger.info('TRACKING -> UNLOCKING: shake detected (count=%d)', current_shake)
+
+        elif state == SystemState.UNLOCKING:
+            """Shake detected, release lock and return to IDLE."""
+            # Terminate tracking, clear target
+            target_pt = None
+            target_3d = None
+            tracked_object_box = None
+            target_tracker.reset()
+            bg_model.reset()
+            dwell_tracker.reset()
+            head_gesture_rec.reset()
+            prev_shake_count = 0
+            prev_nod_count = 0
+
+            # Transition back to IDLE
+            state = SystemState.IDLE
+            logger.info('UNLOCKING -> IDLE: lock released, hand pointing restored')
+
+        # --- Normalize frames for display ---
         def _norm_frame(f):
-            import numpy as _np
             if f is None:
-                return _np.zeros((480,640,3), dtype=_np.uint8)
-            if _np.ndim(f) == 2:
+                return np.zeros((480, 640, 3), dtype=np.uint8)
+            if np.ndim(f) == 2:
                 f2 = cv2.cvtColor(f, cv2.COLOR_GRAY2BGR)
             elif f.shape[2] == 4:
                 f2 = f[:, :, :3]
             else:
                 f2 = f
-            f2 = _np.ascontiguousarray(f2)
-            if f2.dtype != _np.uint8:
-                f2 = f2.astype(_np.uint8)
+            f2 = np.ascontiguousarray(f2)
+            if f2.dtype != np.uint8:
+                f2 = f2.astype(np.uint8)
             return f2
+
         fF = _norm_frame(frameF)
         fA = _norm_frame(frameA)
-        draw_info(fF, face_expr, face_pts, [], [], None, target_pt=None, tracking_mode=False)
-        draw_info(fA, None, None, hands, dets, sel, target_pt=target_pt, tracking_mode=(tracking_state == 'TRACKING'))
 
-        # Draw target point only (no ray)
-        if target_pt is not None:
-            try:
-                cv2.circle(fA, target_pt, 8, (0, 0, 255), -1)
-            except Exception:
-                pass
-        combined = cv2.hconcat([cv2.resize(fF, (640,480)), cv2.resize(fA, (640,480))])
-        cv2.imshow('F (face) | A (user view)', combined)
+        # --- Draw face expression info on F camera ---
+        if face_expr:
+            cv2.putText(fF, f'Face: {face_expr}', (10, 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        # --- Draw skeleton + head gesture info on F camera ---
+        draw_skeleton(fF, pose_pts)
+        if head_result['pitch'] is not None:
+            cv2.putText(fF, f"Nod:{head_result['nod_count']}  Shake:{head_result['shake_count']}",
+                        (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+            cv2.putText(fF, f"Pitch:{head_result['pitch']:.1f} Yaw:{head_result['yaw']:.1f}",
+                        (10, 72), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+            nd = head_result.get('nod_down', False)
+            sl = head_result.get('shake_left', False)
+            cv2.putText(fF, f"nod_down:{nd} shake_left:{sl}",
+                        (10, 92), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1)
+
+        # --- Draw info on A camera ---
+        draw_info(fA, state, head_result, hands, dets, target_pt, tracked_object_box, dwell_progress)
+
+        # --- Display ---
+        combined = cv2.hconcat([cv2.resize(fF, (640, 480)), cv2.resize(fA, (640, 480))])
+        cv2.imshow('F (face+pose) | A (user view)', combined)
         if cv2.waitKey(1) & 0xFF == 27:
             break
+
     capF.release()
     if use_ak:
         ak.release()
     else:
         capA.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     import traceback, sys
@@ -304,7 +384,5 @@ if __name__ == '__main__':
             with open(err_path, 'w', encoding='utf-8') as f:
                 f.write(tb)
         except Exception:
-            # fallback: print to stderr
             print('Failed to write run_err.txt; exception:\n' + tb, file=sys.stderr)
-        # Re-raise so the process shows failure in console if attached
         raise
