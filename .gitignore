@@ -4,6 +4,8 @@ models/
 # VSCode 配置
 .vscode/
 
+.gpt_cache/
+
 # Python 缓存
 __pycache__/
 *.pyc
@@ -31,3 +33,5 @@ test_new_modules.py
 .DS_Store
 *.log
 *.tmp
+
+.ar_session.json
