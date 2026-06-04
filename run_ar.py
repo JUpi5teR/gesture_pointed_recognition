@@ -23,6 +23,7 @@ from config import (CAM_FRONT_ID, CAM_SIDE_ID, CAM_WIDTH, CAM_HEIGHT,
                     BG_ROI_PAD, BG_LEARNING_RATE,
                     WIN_W, WIN_H)
 from ar_layer import ARManager
+from ar_layer.login_manager import (PROVIDER_CHATGPT, PROVIDER_DEEPSEEK, PROVIDER_QWEN, PROVIDER_GLM, PROVIDERS, PROVIDER_DEFAULT_MODEL, PROVIDER_BASE_URL)
 
 STDOUT_PATH = r"e:\Code\CV_lab\my_homework\run_stdout.txt"
 LOG_PATH = r"e:\Code\CV_lab\my_homework\run_log.txt"
@@ -170,50 +171,92 @@ def _detect_hands_only(detector, frame):
     except Exception:
         return {"hands": [], "aruco": []}
 
-LOGIN_WIN_W, LOGIN_WIN_H = 500, 380
+LOGIN_WIN_W, LOGIN_WIN_H = 500, 420
 
 def show_login_page(ar_manager):
     if ar_manager.login.is_logged_in:
         return True
+    selected_provider = ar_manager.login.provider
     api_key_input = ""
-    active_input = True
     logger.info("Showing login page")
     while True:
         canvas = np.zeros((LOGIN_WIN_H, LOGIN_WIN_W, 3), dtype=np.uint8)
         cv2.rectangle(canvas, (0, 0), (LOGIN_WIN_W, LOGIN_WIN_H), (30, 30, 50), -1)
         cv2.putText(canvas, "AR Information System", (60, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 255), 2)
-        cv2.putText(canvas, "ChatGPT Login", (60, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 200), 1)
-        cv2.putText(canvas, "Enter your OpenAI API Key:", (60, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-        cv2.rectangle(canvas, (60, 155), (440, 185), (60, 60, 80), -1)
-        cv2.rectangle(canvas, (60, 155), (440, 185), (100, 100, 180) if active_input else (80, 80, 100), 2)
+
+        # Provider selection
+        provider_names = {
+            PROVIDER_CHATGPT: "ChatGPT (OpenAI)",
+            PROVIDER_DEEPSEEK: "DeepSeek",
+            PROVIDER_QWEN: "Qwen (Alibaba)",
+            PROVIDER_GLM: "GLM (Zhipu AI)",
+        }
+        models = {
+            PROVIDER_CHATGPT: "gpt-4o / gpt-4o-mini",
+            PROVIDER_DEEPSEEK: "deepseek-chat / deepseek-reasoner",
+            PROVIDER_QWEN: "qwen-plus / qwen-max",
+            PROVIDER_GLM: "glm-4v-plus / glm-4-plus",
+        }
+        y_p = 85
+        cv2.putText(canvas, "Select Provider:", (60, y_p), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 200), 1)
+        for i, (key, name) in enumerate(provider_names.items()):
+            num = i + 1
+            clr = (100, 255, 100) if key == selected_provider else (150, 150, 150)
+            prefix = "[" + str(num) + "]"
+            marker = " <--" if key == selected_provider else ""
+            label = f"{prefix} {name}{marker}"
+            cv2.putText(canvas, label, (80 + (i % 2) * 200, y_p + 22 + (i // 2) * 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, clr, 1)
+
+        # API key input
+        y_input_label = y_p + 65
+        y_input_box = y_input_label + 15
+        provider_label = provider_names.get(selected_provider, "ChatGPT (OpenAI)")
+        cv2.putText(canvas, f"Enter {provider_label} API Key:", (60, y_input_label), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        cv2.rectangle(canvas, (60, y_input_box), (440, y_input_box + 30), (60, 60, 80), -1)
+        cv2.rectangle(canvas, (60, y_input_box), (440, y_input_box + 30), (100, 100, 180), 2)
         display_key = api_key_input[:42] + ("..." if len(api_key_input) > 42 else "")
         if not display_key:
-            display_key = "Paste or type your API key here..."
-            cv2.putText(canvas, display_key, (65, 177), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 120), 1)
+            cv2.putText(canvas, "Paste or type your API key here...", (65, y_input_box + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 120), 1)
         else:
-            cv2.putText(canvas, display_key, (65, 177), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
-        cv2.putText(canvas, "Get your API key: platform.openai.com/api-keys", (60, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 120, 140), 1)
-        cv2.putText(canvas, "Ctrl+V  ->  Paste  |  Enter  ->  Login", (60, 260), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 200, 180), 1)
-        cv2.putText(canvas, "Esc  ->  Exit  |  Backspace  ->  Delete", (60, 282), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (140, 140, 160), 1)
+            cv2.putText(canvas, display_key, (65, y_input_box + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
+
+        # Model hint
+        y_model = y_input_box + 45
+        default_model = PROVIDER_DEFAULT_MODEL.get(selected_provider, "gpt-4o")
+        model_list = models.get(selected_provider, "gpt-4o / gpt-4o-mini")
+        cv2.putText(canvas, f"Default model: {default_model}", (60, y_model), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 180, 120), 1)
+
+        # Instructions
+        y_help = y_model + 30
+        cv2.putText(canvas, "Ctrl+V  ->  Paste  |  Enter  ->  Login", (60, y_help), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 200, 180), 1)
+        cv2.putText(canvas, "Esc  ->  Exit  |  Backspace  ->  Delete", (60, y_help + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (140, 140, 160), 1)
+        cv2.putText(canvas, "1-4  ->  Select Provider", (60, y_help + 44), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 120), 1)
+
         cv2.imshow("AR System - Login", canvas)
         key = cv2.waitKey(30) & 0xFF
         if key == 27:
             return False
         elif key == 13:
             if api_key_input.strip():
-                if ar_manager.login.login(api_key_input.strip()):
+                if ar_manager.login.login(api_key_input.strip(), provider=selected_provider):
                     ar_manager.gpt.api_key = ar_manager.login.api_key
+                    ar_manager.gpt.base_url = ar_manager.login.base_url
+                    ar_manager.gpt.model = ar_manager.login.model_name
+                    ar_manager.gpt.provider = selected_provider
                     cv2.destroyWindow("AR System - Login")
-                    logger.info("Login successful")
+                    logger.info(f"Login successful - provider: {selected_provider}")
                     return True
-        elif key == 22:
+        elif key == 22:  # Ctrl+V
             pasted = _get_clipboard()
             if pasted:
                 pasted = pasted.replace("\r", "").replace("\n", "").replace("\t", "").strip()
                 api_key_input += pasted
-        elif key == 8:
+        elif key == 8:  # Backspace
             if api_key_input:
                 api_key_input = api_key_input[:-1]
+        elif 49 <= key <= 52:  # Keys 1-4
+            provider_keys = [PROVIDER_CHATGPT, PROVIDER_DEEPSEEK, PROVIDER_QWEN, PROVIDER_GLM]
+            selected_provider = provider_keys[key - 49]
         elif 32 <= key <= 126:
             api_key_input += chr(key)
     return False

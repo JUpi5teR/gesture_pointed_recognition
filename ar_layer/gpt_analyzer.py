@@ -12,12 +12,16 @@ try:
 except ImportError:
     HAS_OPENAI = False
 
+from .login_manager import PROVIDER_CHATGPT, PROVIDER_BASE_URL
+
 logger = logging.getLogger(__name__)
 
 class GPTImageAnalyzer:
-    def __init__(self, api_key="", model="gpt-4o", cache_dir=None):
+    def __init__(self, api_key="", model="gpt-4o", cache_dir=None, provider=PROVIDER_CHATGPT, base_url=None):
         self.api_key = api_key
         self.model = model
+        self.provider = provider
+        self.base_url = base_url or PROVIDER_BASE_URL.get(provider, PROVIDER_BASE_URL[PROVIDER_CHATGPT])
         self._cache = {}
         cache_dir = cache_dir or (Path(__file__).parent.parent / ".gpt_cache")
         self.cache_dir = Path(cache_dir)
@@ -58,7 +62,7 @@ class GPTImageAnalyzer:
             logger.info("GPT cache hit for %s", ckey[:8])
             return self._cache[ckey]
         try:
-            client = OpenAI(api_key=self.api_key)
+            client = OpenAI(api_key=self.api_key, base_url=self.base_url)
             b64 = base64.b64encode(image_bytes).decode("utf-8")
             resp = client.chat.completions.create(
                 model=self.model,

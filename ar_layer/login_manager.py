@@ -8,11 +8,38 @@ logger = logging.getLogger(__name__)
 
 CONFIG_FILE = Path(__file__).parent.parent / ".ar_session.json"
 
+PROVIDER_CHATGPT = "chatgpt"
+PROVIDER_DEEPSEEK = "deepseek"
+PROVIDER_QWEN = "qwen"
+PROVIDER_GLM = "glm"
+
+PROVIDERS = {
+    PROVIDER_CHATGPT: "ChatGPT (OpenAI)",
+    PROVIDER_DEEPSEEK: "DeepSeek",
+    PROVIDER_QWEN: "Qwen (Alibaba)",
+    PROVIDER_GLM: "GLM (Zhipu AI)",
+}
+
+PROVIDER_DEFAULT_MODEL = {
+    PROVIDER_CHATGPT: "gpt-4o",
+    PROVIDER_DEEPSEEK: "deepseek-vl",
+    PROVIDER_QWEN: "qwen-vl-max",
+    PROVIDER_GLM: "glm-4.6V-flash",
+}
+
+PROVIDER_BASE_URL = {
+    PROVIDER_CHATGPT: "https://api.openai.com/v1",
+    PROVIDER_DEEPSEEK: "https://api.deepseek.com/v1",
+    PROVIDER_QWEN: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    PROVIDER_GLM: "https://open.bigmodel.cn/api/paas/v4",
+}
+
 DEFAULT_CONFIG = {
     "api_key": "",
     "session_token": "",
     "login_time": 0,
-    "model": "gpt-4o",
+    "provider": PROVIDER_CHATGPT,
+    "model": PROVIDER_DEFAULT_MODEL[PROVIDER_CHATGPT],
     "logged_in": False
 }
 
@@ -39,9 +66,12 @@ class LoginManager:
         except Exception as e:
             logger.error("Failed to save session: %s", e)
 
-    def login(self, api_key):
+    def login(self, api_key, provider=None):
         if not api_key or len(api_key) < 10:
             return False
+        if provider and provider in PROVIDERS:
+            self.config["provider"] = provider
+            self.config["model"] = PROVIDER_DEFAULT_MODEL[provider]
         self.config["api_key"] = api_key
         self.config["session_token"] = "sess_" + str(int(time.time()))
         self.config["login_time"] = time.time()
@@ -54,6 +84,7 @@ class LoginManager:
     def logout(self):
         self.config["api_key"] = ""
         self.config["session_token"] = ""
+        self.config["provider"] = PROVIDER_CHATGPT
         self.config["logged_in"] = False
         self._logged_in = False
         self._save()
@@ -65,3 +96,15 @@ class LoginManager:
     @property
     def api_key(self):
         return self.config.get("api_key", "")
+
+    @property
+    def provider(self):
+        return self.config.get("provider", PROVIDER_CHATGPT)
+
+    @property
+    def base_url(self):
+        return PROVIDER_BASE_URL.get(self.provider, PROVIDER_BASE_URL[PROVIDER_CHATGPT])
+
+    @property
+    def model_name(self):
+        return self.config.get("model", PROVIDER_DEFAULT_MODEL.get(self.provider, PROVIDER_DEFAULT_MODEL[PROVIDER_CHATGPT]))
