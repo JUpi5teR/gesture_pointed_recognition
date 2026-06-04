@@ -24,6 +24,7 @@ request.md
 _builder.py
 _gen.py
 _write_files.py
+_write_cv_report.py
 test_new_modules.py
 
 # 通用忽略

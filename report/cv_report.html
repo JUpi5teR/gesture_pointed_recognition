@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang=zh-CN>
+<head>
+<meta charset=UTF-8>
+<meta name=viewport content=width=device-width,initial-scale=1.0>
+<title>CV课设汇报 - 双摄像头视线指向目标选择系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Segoe UI,Microsoft YaHei,sans-serif;background:#f8f9fa;color:#333;line-height:1.8}
+.sidebar{position:fixed;top:0;left:0;width:250px;height:100vh;background:#1a1a2e;color:#eee;overflow-y:auto;padding:25px 18px;z-index:100}
+.sidebar h3{font-size:13px;color:#667;text-transform:uppercase;letter-spacing:2px;margin:18px 0 6px;border-bottom:1px solid #333;padding-bottom:5px}
+.sidebar a{display:block;color:#999;text-decoration:none;padding:4px 0;font-size:13px;transition:.2s}
+.sidebar a:hover{color:#fff;padding-left:4px}
+.sidebar .s-title{font-size:15px;color:#fff;font-weight:bold;margin-bottom:3px;line-height:1.4}
+.sidebar .s-meta{font-size:11px;color:#556;margin-bottom:18px}
+.main{margin-left:250px;padding:40px 50px;max-width:960px}
+h1{font-size:30px;color:#1a1a2e;margin-bottom:6px;padding-bottom:12px;border-bottom:3px solid #4a6cf7}
+h2{font-size:22px;color:#1a1a2e;margin:35px 0 12px;padding-bottom:6px;border-bottom:2px solid #e0e0e0}
+h3{font-size:17px;color:#333;margin:20px 0 8px}
+p{margin:10px 0;text-align:justify}
+.hero{background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#fff;padding:35px;border-radius:10px;margin-bottom:25px}
+.hero h1{color:#fff;border:none;font-size:26px}
+.hero .meta{color:#88a;font-size:14px;margin-top:12px}
+.hero .meta span{margin-right:25px}
+.abstract{background:#f0f4ff;border-left:4px solid #4a6cf7;padding:18px;border-radius:4px;margin:18px 0}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:15px 0}
+.card-item{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:18px;border-top:3px solid #4a6cf7}
+.card-item h4{color:#1a1a2e;font-size:14px;margin-bottom:6px}
+.card-item p{font-size:13px;color:#555;margin:0}
+.algo-box{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:22px;margin:18px 0;border-left:4px solid #4a6cf7}
+.tag{display:inline-block;background:#e8ecff;color:#4a6cf7;padding:2px 10px;border-radius:12px;font-size:12px;margin:3px}
+code{background:#eee;padding:2px 6px;border-radius:3px;font-size:13px;font-family:Consolas,Courier New,monospace}
+pre{background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:6px;overflow-x:auto;font-size:13px;margin:10px 0;line-height:1.5}
+.sm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;padding:15px;margin:15px 0}
+.sb{padding:10px 14px;border-radius:6px;font-size:13px;font-weight:bold;text-align:center;min-width:95px}
+.s-i{background:#e8f5e9;color:#2e7d32;border:2px solid #81c784}
+.s-d{background:#fff8e1;color:#f57f17;border:2px solid #ffd54f}
+.s-c{background:#fff3e0;color:#e65100;border:2px solid #ffb74d}
+.s-t{background:#ffebee;color:#c62828;border:2px solid #ef9a9a}
+.s-u{background:#f3e5f5;color:#6a1b9a;border:2px solid #ce93d8}
+.arrow{font-size:18px;color:#4a6cf7}
+.tl{font-size:10px;color:#888;margin-top:2px}
+.vis-box{background:#1a1a2e;border-radius:8px;padding:20px;margin:15px 0;text-align:center;min-height:120px;display:flex;align-items:center;justify-content:center}
+.vis-box canvas{max-width:100%}
+.vis-box p{color:#fff;font-size:14px;margin:0}
+.footer{text-align:center;padding:25px;color:#999;font-size:13px;border-top:1px solid #e0e0e0;margin-top:40px}
+@media(max-width:768px){.sidebar{display:none}.main{margin-left:0;padding:15px}}
+</style>
+</head>
+<body>
+<div class=sidebar>
+<div class=s-title>双摄像头视线指向目标选择系统</div>
+<div class=s-meta>CV课程设计汇报</div>
+<h3>汇报信息</h3>
+<a>汇报人: 张英鹏</a>
+<a>班级: 人工智能2302</a>
+<h3>目录</h3>
+<a href=#overview>项目概述</a>
+<a href=#functions>核心功能</a>
+<a href=#algo-hand>MediaPipe手部检测</a>
+<a href=#algo-point>指尖指向算法</a>
+<a href=#algo-target>目标选择算法</a>
+<a href=#algo-dwell>停留确认机制</a>
+<a href=#algo-head>头部姿态控制</a>
+<a href=#algo-yolo>YOLOv8目标检测</a>
+<a href=#algo-kalman>Kalman跟踪滤波</a>
+<a href=#algo-sm>状态机设计</a>
+<a href=#result>效果展示</a>
+</div>
+<div class=main>
+<div class=hero>
+<h1>双摄像头视线指向目标选择系统</h1>
+<p style=color:#99aaff;margin:10px 0;font-size:15px>基于MediaPipe + YOLOv8 + Kalman滤波的无接触式人机交互系统</p>
+<div class=meta>
+<span>汇报人: 张英鹏</span>
+<span>班级: 人工智能2302</span>
+<span>日期: 2026年6月</span>
+</div>
+</div>
+<h2 id=overview>项目概述</h2>
+<div class=abstract>
+<strong>摘要：</strong>本项目设计并实现了一套基于计算机视觉的无接触式人机交互系统。用户通过指尖指向目标物体，系统利用YOLOv8进行实时目标检测，结合MediaPipe手部关键点检测计算指向方向，通过角度得分筛选候选目标。指尖在目标区域停留数秒后触发确认弹窗，用户通过点头/摇头进行确认或取消，确认后系统对目标进行持续跟踪，摇头即可释放锁定。系统核心由有限状态机驱动，融合了Kalman滤波平滑跟踪、指数衰减停留计时器、Pose骨架头部姿态识别等多项技术。
+</div>
+<h2 id=functions>核心功能</h2>
+<div class=card-grid>
+<div class=card-item><h4>手部关键点检测</h4><p>基于MediaPipe Hands，实时检测21个手部关键点坐标，支持双手同时检测，置信度阈值0.5</p><div><span class=tag>MediaPipe</span><span class=tag>21 landmarks</span></div></div>
+<div class=card-item><h4>指尖指向识别</h4><p>基于凸包分析与贝塞尔曲线平滑，计算食指方向向量，结合YOLO检测框进行目标选择</p><div><span class=tag>Convexity Defects</span><span class=tag>Bezier Smooth</span></div></div>
+<div class=card-item><h4>YOLOv8目标检测</h4><p>采用Ultralytics YOLOv8n模型，在640x640分辨率下实时检测场景中的物体，置信度阈值0.35</p><div><span class=tag>YOLOv8</span><span class=tag>Ultralytics</span></div></div>
+<div class=card-item><h4>停留确认机制</h4><p>基于指数衰减的停留计时器，支持短暂离开容忍(0.3s)后递增复原，避免微小抖动导致的误触发</p><div><span class=tag>Exponential Decay</span><span class=tag>Tolerance Window</span></div></div>
+<div class=card-item><h4>头部姿态控制</h4><p>基于MediaPipe Pose骨架，利用左右肩与鼻尖三点计算Pitch/Yaw，实现点头确认/摇头取消</p><div><span class=tag>Pose Estimation</span><span class=tag>Pitch/Yaw</span></div></div>
+<div class=card-item><h4>Kalman滤波跟踪</h4><p>对选中目标进行2D位置(点)和4D边界框的双通道Kalman滤波，实现平滑跟踪和失焦重捕</p><div><span class=tag>Kalman Filter</span><span class=tag>Smooth Tracking</span></div></div>
+</div>
+<h2 id=algo-hand>MediaPipe手部关键点检测</h2>
+<div class=algo-box>
+<p>系统采用<strong>MediaPipe Hands</strong>框架进行手部关键点检测。MediaPipe Hands是一个基于机器学习的单手21个3D关键点检测器，采用两阶段流水线：首先通过手掌检测器定位手部区域，再通过关键点回归模型输出21个手部关键点坐标。</p>
+<p>在本系统中，MediaPipe Hands的配置参数为：最大检测手数设为2(支持双手操作)，检测置信度阈值0.5，跟踪置信度阈值0.5。同时系统支持向后兼容MediaPipe Tasks API，当检测到新版MediaPipe时自动切换至PoseLandmarker接口，保证了跨版本兼容性。</p>
+<h3>关键点标注</h3>
+<p>MediaPipe Hands定义的21个关键点中，本系统特别关注以下关键点组合用于手势判定：</p>
+<pre>
+  WRIST       = 0   (手腕)
+  THUMB_TIP   = 4   (拇指尖)
+  INDEX_TIP   = 8   (食指尖)
+  MIDDLE_TIP  = 12  (中指尖)
+  RING_TIP    = 16  (无名指尖)
+  PINKY_TIP   = 20  (小指尖)
+</pre>
+</div>
+<h2 id=algo-point>指尖指向算法</h2>
+<div class=algo-box>
+<h3>凸包分析(Convexity Defects)</h3>
+<p>本系统在MediaPipe原始手部关键点的基础上，进一步通过<strong>凸包分析(Convexity Defects)</strong>对指尖位置进行精确定位。算法流程如下：</p>
+<pre>
+1. 从二值化手部轮廓中提取凸包(Convex Hull)
+2. 计算凸包与原始轮廓之间的凸性缺陷(Convexity Defects)
+3. 凸性缺陷的最深点即为指尖候选位置
+4. 基于深度筛选：缺陷深度超过平均深度50%的保留为有效指尖
+</pre>
+<h3>贝塞尔曲线平滑方向向量</h3>
+<p>在贝塞尔平滑算法上，本系统采用了<strong>基于自适应采样的二次贝塞尔曲线平滑</strong>方法：对凸包采样点进行步进式最大偏差采样(Step=70px, D=7px)，然后对每三个连续点拟合二次贝塞尔曲线，生成平滑的指尖方向向量。该方法相较于直接使用原始轮廓点，具有以下优势：</p>
+<pre>
+- 抗噪性强：有效抑制帧间抖动
+- 方向稳定：确保指向方向的连贯性
+- 计算高效：仅需O(n)复杂度
+</pre>
+</div>
+<h2 id=algo-target>目标选择算法</h2>
+<div class=algo-box>
+<p>系统采用<strong>基于角度与距离的综合得分算法(choose_target_2d)</strong>筛选指尖指向的物体。该算法在经典视线投射(ray-casting)方法的基础上，加入了对物体尺寸和指尖垂直偏移的归一化处理：</p>
+<pre>
+1. 计算食指指尖与指根的向量方向: dv = tip - base
+2. 对每个YOLO检测到的物体:
+   a. 计算物体中心相对指尖的方向向量: vec = center - tip
+   b. 计算dv与vec的夹角theta = acos(dot(dv, vec))
+   c. 如果theta > 30度，直接丢弃(角度阈值)
+   d. 计算垂直偏移惩罚: perp = |vec x dv|
+3. 得分公式:
+   score = max(0, cos(theta)) * max(0, 1 - perp / (diag * dist_coeff))
+   - cos(theta): 角度越接近0得分越高
+   - 垂直偏移归一化: 偏移越小得分越高
+4. 选择得分最高的物体作为目标
+</pre>
+<p>本算法在传统射线检测(ray-casting)的基础上，创新性地引入了<strong>物体尺寸归一化因子</strong>：使用物体对角线长度来归一化垂直偏移，使得大物体和小物体在选择时具有公平性。</p>
+</div>
+<h2 id=algo-dwell>停留确认机制</h2>
+<div class=algo-box>
+<p>停留确认机制是本系统的核心交互逻辑。指尖指向目标后，需要在目标区域停留超过设定阈值(默认1.5秒)才能触发确认弹窗。为应对实际使用中的手部抖动和短暂偏移问题，本系统设计了<strong>带指数衰减和容忍窗口的停留计时器(TargetDwellTracker)</strong>：</p>
+<h3>算法特点</h3>
+<pre>
+1. 停留计数(Dwell Count):
+   - 目标在区域内: 每帧计数 +1
+   - 目标离开区域 &lt; 容忍时间(0.3s): 计数不变(容忍窗口)
+   - 目标离开区域 &gt; 容忍时间: 计数按指数衰减(rate=0.5/帧)
+   - 计数衰减至最低保持阈值(30%)以下: 彻底清零
+
+2. 确认弹窗(Confirm Popup):
+   - 停留计数达到阈值(1.5s * 30fps = 45帧)后触发
+   - 在目标位置绘制黄色圆环，进度条逆时针旋转
+   - 超时(5s)自动取消，释放锁定回到IDLE
+</pre>
+<h3>优势</h3>
+<p>传统的阈值计数方法在指尖短暂离开目标区域时会立即清零，导致用户需要反复定位。本算法通过容忍窗口和指数衰减的组合，显著提升了系统的可用性和鲁棒性，尤其在手部轻微抖动时表现优异。</p>
+</div>
+<h2 id=algo-head>头部姿态控制</h2>
+<div class=algo-box>
+<h3>基于Pose骨架的Pitch/Yaw估计</h3>
+<p>头部姿态识别采用<strong>MediaPipe PoseLandmarker</strong>获取人体33个姿态关键点，利用鼻尖(0)、左肩(11)、右肩(12)三个关键点计算头部Pitch(俯仰)和Yaw(偏航)角度：</p>
+<pre>
+1. 计算肩部中点: shoulder_center = (L_shoulder + R_shoulder) / 2
+2. 计算颈部向量: neck = nose - shoulder_center
+3. 分解颈部向量:
+   - 沿肩部方向的分量 = lateral_component
+   - 垂直于肩部的分量 = forward_component
+4. Pitch(俯仰角):
+   - angle_from_up: 颈部向量与垂直方向的夹角
+   - ratio_pitch: 基于颈长/肩宽比偏离校准值的角度
+   - 最终pitch = max(angle_from_up, ratio_pitch)
+5. Yaw(偏航角):
+   - yaw = atan2(lateral_component, forward_component)
+</pre>
+<h3>自动标定机制</h3>
+<p>系统在上电后自动进行15帧的标定，记录用户自然姿态下的<strong>颈长/肩宽比(neck_shoulder_ratio)</strong>作为参考基准。该标定值采用指数移动平均(EMA)进行平滑更新，alpha=0.3，使得标定结果对单帧噪声具有鲁棒性。</p>
+<h3>点头/摇头判定</h3>
+<pre>
+- 点头: pitch &gt; 18度(低头) 后 pitch &lt; 8度(抬头) = 完成一次点头
+- 摇头: yaw &lt; -12度(左摆) 后 yaw &gt; 12度(右摆) = 完成一次摇头
+</pre>
+</div>
+<h2 id=algo-yolo>YOLOv8目标检测</h2>
+<div class=algo-box>
+<p>系统采用<strong>Ultralytics YOLOv8n</strong>(Nano版本)作为目标检测引擎。YOLOv8是You Only Look Once系列的最新迭代，采用Anchor-Free设计理念，将目标检测建模为回归问题：</p>
+<pre>
+- 输入尺寸: 640x640
+- 置信度阈值: 0.35
+- 模型类型: yolov8n.pt (约6MB, 适合实时场景)
+- 推理后端: PyTorch (可选CUDA GPU加速)
+</pre>
+<p>YOLOv8采用C2f模块替代了YOLOv5中的C3模块，引入了更丰富的梯度流信息，在保持轻量化的同时提升了检测精度。系统仅保留边界框坐标、置信度和类别标签三个输出字段，用于后续的目标选择与跟踪。</p>
+</div>
+<h2 id=algo-kalman>Kalman滤波跟踪</h2>
+<div class=algo-box>
+<p>当用户通过点头确认选中目标后，系统进入跟踪(Tracking)阶段。为实现平滑的跟踪效果并应对短暂遮挡，本系统设计了<strong>双通道Kalman滤波器(KalmanTracker + TargetTracker)</strong>：</p>
+<h3>双通道设计</h3>
+<pre>
+通道1 - 2D点跟踪器:
+  - 状态: (x, y, vx, vy) 二维位置+速度
+  - 过程噪声: 0.05
+  - 测量噪声: 2.0
+
+通道2 - 4D边界框跟踪器:
+  - 状态: (x1, y1, x2, y2) 边界框四维
+  - 过程噪声: 0.02
+  - 测量噪声: 5.0
+</pre>
+<h3>跟踪闭环</h3>
+<pre>
+1. 正常跟踪: 检测到目标时，更新Kalman状态并显示实时位置
+2. 目标丢失: 目标点消失，记录最后已知位置
+3. 重捕机制: 基于最后位置和边界框尺寸动态扩大搜索半径
+4. 重新捕获: 物体重新出现时，目标点立即恢复
+</pre>
+</div>
+<h2 id=algo-sm>状态机设计</h2>
+<div class=algo-box>
+<p>系统的整个交互流程由<strong>五状态有限状态机(Finite State Machine)</strong>驱动。状态定义在utils.py的SystemState枚举类中：</p>
+<div class=sm>
+<div class=sb s-i>IDLE<br><span class=tl>空闲待命</span></div>
+<div class=arrow>→</div>
+<div class=sb s-d>DWELL_WAIT<br><span class=tl>停留等待</span></div>
+<div class=arrow>→</div>
+<div class=sb s-c>CONFIRMING<br><span class=tl>确认弹窗</span></div>
+<div class=arrow>→</div>
+<div class=sb s-t>TRACKING<br><span class=tl>持续跟踪</span></div>
+<div class=arrow>→</div>
+<div class=sb s-u>UNLOCKING<br><span class=tl>解锁释放</span></div>
+</div>
+<h3>状态迁移规则</h3>
+<p><strong>IDLE → DWELL_WAIT:</strong> 指尖指向某一YOLO检测到的物体，停留计时器开始累加</p>
+<p><strong>DWELL_WAIT → CONFIRMING:</strong> 停留计数达到阈值(1.5s)，在目标位置弹出黄色确认圆环</p>
+<p><strong>CONFIRMING → TRACKING:</strong> 用户点头确认，系统锁定目标并进入连续跟踪</p>
+<p><strong>CONFIRMING → IDLE:</strong> 用户摇头取消，或超时(5s)自动取消，回到空闲</p>
+<p><strong>TRACKING → UNLOCKING:</strong> 用户摇头，触发解锁流程</p>
+<p><strong>UNLOCKING → IDLE:</strong> 清理所有跟踪状态、计时器、Kalman状态，回到空闲</p>
+</div>
+<h2 id=result>效果展示</h2>
+<div class=algo-box>
+<h3>系统界面布局</h3>
+<pre>
++---------------------------+---------------------------+
+|    面部摄像头画面(F)       |    场景摄像头画面(A)       |
+|                           |                           |
+|  Face: neutral           |  State: DWELL_WAIT        |
+|  Nod:2  Shake:0          |  Dwell: [========  45%]  |
+|  Pitch:15.2 Yaw:3.1     |  Hand landmarks drawn     |
+|  Pose skeleton overlay   |  YOLO detection boxes     |
+|                           |  Target: person           |
++---------------------------+---------------------------+
+</pre>
+<h3>交互流程演示</h3>
+<p><strong>步骤1：</strong>面向摄像头，手部指向目标物体区域。系统实时显示手部21个关键点和YOLO检测框。</p>
+<p><strong>步骤2：</strong>指尖对准目标物体，状态由IDLE切换为DWELL_WAIT，停留进度条开始增长(百分比显示)。</p>
+<p><strong>步骤3：</strong>进度条达到100%时触发确认弹窗，在指尖位置绘制黄色圆环进度条，显示&quot;Nod=OK Shake=Cancel&quot;提示。</p>
+<p><strong>步骤4-A(确认)：</strong>用户点头(Nod)确认，状态切换为TRACKING，目标框变为红色并进行持续跟踪。</p>
+<p><strong>步骤4-B(取消)：</strong>用户摇头(Shake)取消，系统回到IDLE空闲状态。</p>
+<p><strong>步骤5(解锁)：</strong>在TRACKING状态下摇头，目标解锁，系统回到IDLE。</p>
+</div>
+<div class=footer>
+<p>计算机视觉课程设计汇报 - 双摄像头视线指向目标选择系统</p>
+<p>汇报人: 张英鹏 | 班级: 人工智能2302</p>
+<p>2026年6月</p>
+</div>
+</div>
+</body>
+</html>
