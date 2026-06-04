@@ -202,6 +202,7 @@ def show_login_page(ar_manager):
         elif key == 13:
             if api_key_input.strip():
                 if ar_manager.login.login(api_key_input.strip()):
+                    ar_manager.gpt.api_key = ar_manager.login.api_key
                     cv2.destroyWindow("AR System - Login")
                     logger.info("Login successful")
                     return True

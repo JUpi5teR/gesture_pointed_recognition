@@ -39,6 +39,9 @@ class ARManager:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         if api_key:
             self.login.login(api_key)
+        # Sync GPT key from saved login session (in case previously logged in)
+        if self.login.is_logged_in and self.login.api_key:
+            self.gpt.api_key = self.login.api_key
 
     def on_target_bound(self, frame, box, label):
         self.anchor.snap(self._get_box_center(box), box)
