@@ -4,3 +4,4 @@ numpy
 pyk4a
 ultralytics
 torch
+openai

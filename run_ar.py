@@ -335,12 +335,21 @@ def main_ar():
                 state = SystemState.IDLE
                 logger.info("CONFIRMING -> IDLE: denied")
             elif confirm_start_time is not None and (time.time() - confirm_start_time) > CONFIRM_TIMEOUT_SEC:
-                target_pt = None; target_3d = None
-                tracked_object_box = None; tracked_label = None
-                last_real_pt = None; last_real_box = None; object_visible = True
-                dwell_tracker.reset(); head_gesture_rec.reset_confirm_state()
-                state = SystemState.IDLE
-                logger.info("CONFIRMING -> IDLE: timeout")
+                # Timeout = auto-confirm (same as nod)
+                if tracked_object_box is not None:
+                    cx, cy = bbox_center(tracked_object_box)
+                    target_tracker.initialize((cx, cy), tracked_object_box)
+                    bg_model.initialize(frameA)
+                    last_real_pt = (cx, cy); last_real_box = tracked_object_box
+                    object_visible = True
+                    head_gesture_rec.reset(); prev_shake_count = 0
+                    state = SystemState.TRACKING
+                    logger.info("CONFIRMING -> TRACKING: timeout, bound to %s", tracked_label)
+                    ar.on_target_bound(frameA, tracked_object_box, tracked_label)
+                else:
+                    dwell_tracker.reset(); head_gesture_rec.reset_confirm_state()
+                    state = SystemState.IDLE
+                    logger.info("CONFIRMING -> IDLE: timeout with no target")
 
         elif state == SystemState.TRACKING:
             search_center = np.array(last_real_pt, dtype=float) if last_real_pt is not None else np.array([0,0], dtype=float)
