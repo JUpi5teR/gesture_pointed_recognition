@@ -6,16 +6,6 @@
 
 ---
 
-## 完整流程演示
-
-点击播放完整操作演示视频：
-
-<video src="report/video/demo_video.mp4" controls width="100%" style="max-width:800px;border-radius:8px">
-  您的浏览器不支持视频播放，请下载 <a href="report/video/demo_video.mp4">demo_video.mp4</a> 后观看。
-</video>
-
----
-
 ## 功能演示
 
 | 功能 | 演示 |
