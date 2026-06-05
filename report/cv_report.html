@@ -169,7 +169,15 @@ body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5
 <div class="feature-card"><div class="f-icon">&#x1F9E0;</div><h4>GPT视觉分析</h4><p>集成ChatGPT/DeepSeek/Qwen/GLM等多模型API，对目标区域截图进行视觉分析，返回结构化描述信息。</p></div>
 <div class="feature-card"><div class="f-icon">&#x1F44B;</div><h4>手势交互控制</h4><p>MediaPipe实时识别5指开合状态，支持竖拇指(唤醒AR)、指天/指地(滚动面板)等多种手势指令平滑映射。</p></div>
 </div></div><div class="page-number">02 / 07</div></section>
-<section class="page" data-page="2"><div class="page-inner"><div class="page-header"><h1>功能演示</h1><div class="subtitle">Demonstration</div></div><div class="demo-grid" id="demoGrid"></div></div><div class="page-number">03 / 07</div></section>
+<section class="page" data-page="2"><div class="page-inner"><div class="page-header"><h1>功能演示</h1><div class="subtitle">Demonstration</div></div>
+<div style="margin-bottom:20px">
+  <h4 style="color:#448aff;font-size:15px;margin-bottom:8px">&#x1F3AC; 完整流程演示</h4>
+  <video src="video/demo_video.mp4" controls width="100%" style="max-width:100%;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.08)">
+    您的浏览器不支持视频播放。
+  </video>
+  <p style="color:#4a6a8a;font-size:12px;margin-top:6px">点击播放完整操作演示视频（包含登录 → 指向 → 停留 → 确认 → 跟踪 → AR面板 → 解锁全流程）</p>
+</div>
+<div class="demo-grid" id="demoGrid"></div></div><div class="page-number">03 / 07</div></section>
 <section class="page" data-page="3"><div class="page-inner"><div class="page-header"><h1>算法设计</h1><div class="subtitle">Algorithm Design</div></div><div class="algo-list">
 <div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F4E6;</div><h3>YOLOv8 目标检测</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">单阶段Anchor-Free检测</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">CSPDarknet骨干→PAN-FPN多尺度→DecoupledHead</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">实时检测手部指向的目标物体提供检测框和类别</div></div></div></div>
 <div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F91C;</div><h3>MediaPipe Hand</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">BlazePalm+Landmark级联回归</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">手掌ROI→21点landmarks→手指状态判定</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">指尖坐标指向计算竖拇指等手势指令识别</div></div></div></div>
