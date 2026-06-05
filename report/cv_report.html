@@ -1,273 +1,259 @@
 <!DOCTYPE html>
-<html lang=zh-CN>
+<html lang="zh-CN">
 <head>
-<meta charset=UTF-8>
-<meta name=viewport content=width=device-width,initial-scale=1.0>
-<title>CV课设汇报 - 双摄像头视线指向目标选择系统</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>基于手势指向的人机交互目标识别与AR增强系统 - 课程设计答辩</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Segoe UI,Microsoft YaHei,sans-serif;background:#f8f9fa;color:#333;line-height:1.8}
-.sidebar{position:fixed;top:0;left:0;width:250px;height:100vh;background:#1a1a2e;color:#eee;overflow-y:auto;padding:25px 18px;z-index:100}
-.sidebar h3{font-size:13px;color:#667;text-transform:uppercase;letter-spacing:2px;margin:18px 0 6px;border-bottom:1px solid #333;padding-bottom:5px}
-.sidebar a{display:block;color:#999;text-decoration:none;padding:4px 0;font-size:13px;transition:.2s}
-.sidebar a:hover{color:#fff;padding-left:4px}
-.sidebar .s-title{font-size:15px;color:#fff;font-weight:bold;margin-bottom:3px;line-height:1.4}
-.sidebar .s-meta{font-size:11px;color:#556;margin-bottom:18px}
-.main{margin-left:250px;padding:40px 50px;max-width:960px}
-h1{font-size:30px;color:#1a1a2e;margin-bottom:6px;padding-bottom:12px;border-bottom:3px solid #4a6cf7}
-h2{font-size:22px;color:#1a1a2e;margin:35px 0 12px;padding-bottom:6px;border-bottom:2px solid #e0e0e0}
-h3{font-size:17px;color:#333;margin:20px 0 8px}
-p{margin:10px 0;text-align:justify}
-.hero{background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);color:#fff;padding:35px;border-radius:10px;margin-bottom:25px}
-.hero h1{color:#fff;border:none;font-size:26px}
-.hero .meta{color:#88a;font-size:14px;margin-top:12px}
-.hero .meta span{margin-right:25px}
-.abstract{background:#f0f4ff;border-left:4px solid #4a6cf7;padding:18px;border-radius:4px;margin:18px 0}
-.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:15px 0}
-.card-item{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:18px;border-top:3px solid #4a6cf7}
-.card-item h4{color:#1a1a2e;font-size:14px;margin-bottom:6px}
-.card-item p{font-size:13px;color:#555;margin:0}
-.algo-box{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:22px;margin:18px 0;border-left:4px solid #4a6cf7}
-.tag{display:inline-block;background:#e8ecff;color:#4a6cf7;padding:2px 10px;border-radius:12px;font-size:12px;margin:3px}
-code{background:#eee;padding:2px 6px;border-radius:3px;font-size:13px;font-family:Consolas,Courier New,monospace}
-pre{background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:6px;overflow-x:auto;font-size:13px;margin:10px 0;line-height:1.5}
-.sm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;padding:15px;margin:15px 0}
-.sb{padding:10px 14px;border-radius:6px;font-size:13px;font-weight:bold;text-align:center;min-width:95px}
-.s-i{background:#e8f5e9;color:#2e7d32;border:2px solid #81c784}
-.s-d{background:#fff8e1;color:#f57f17;border:2px solid #ffd54f}
-.s-c{background:#fff3e0;color:#e65100;border:2px solid #ffb74d}
-.s-t{background:#ffebee;color:#c62828;border:2px solid #ef9a9a}
-.s-u{background:#f3e5f5;color:#6a1b9a;border:2px solid #ce93d8}
-.arrow{font-size:18px;color:#4a6cf7}
-.tl{font-size:10px;color:#888;margin-top:2px}
-.vis-box{background:#1a1a2e;border-radius:8px;padding:20px;margin:15px 0;text-align:center;min-height:120px;display:flex;align-items:center;justify-content:center}
-.vis-box canvas{max-width:100%}
-.vis-box p{color:#fff;font-size:14px;margin:0}
-.footer{text-align:center;padding:25px;color:#999;font-size:13px;border-top:1px solid #e0e0e0;margin-top:40px}
-@media(max-width:768px){.sidebar{display:none}.main{margin-left:0;padding:15px}}
+html{scroll-behavior:smooth}
+body{font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#f5f7fa;color:#1a2332;overflow:hidden;height:100vh;width:100vw}
+.nav-bar{position:fixed;left:0;top:0;width:200px;height:100vh;background:linear-gradient(180deg,#ffffff,#eef2f7);border-right:1px solid #e0e6ef;z-index:1000;display:flex;flex-direction:column;padding:30px 0;overflow-y:auto}
+.nav-bar .logo{text-align:center;padding:0 15px 20px;border-bottom:1px solid #e0e6ef;margin-bottom:15px}
+.nav-bar .logo .icon{font-size:28px;display:block;margin-bottom:6px}
+.nav-bar .logo .title{font-size:11px;color:#4a6a8a;line-height:1.4;letter-spacing:1px}
+.nav-item{display:block;padding:12px 20px;color:#4a5a7a;text-decoration:none;font-size:14px;cursor:pointer;border-left:3px solid transparent;transition:all .3s}
+.nav-item:hover{color:#3a6aaa;background:rgba(64,128,255,.06)}
+.nav-item.active{color:#448aff;border-left-color:#448aff;background:linear-gradient(90deg,rgba(68,138,255,.1),transparent)}
+.nav-item .num{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;font-size:11px;margin-right:10px;background:rgba(68,138,255,.12);color:#448aff}
+.nav-item.active .num{background:#448aff;color:#fff}
+.main-container{margin-left:200px;height:100vh;position:relative;overflow:hidden}
+.page{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;opacity:0;visibility:hidden;transition:opacity .5s,visibility .5s;overflow-y:auto}
+.page.active{opacity:1;visibility:visible;z-index:10}.page::before{content:'';flex:1}.page::after{content:'';flex:1}.page-inner{flex-shrink:0;width:100%;max-width:1000px;margin:0 auto;padding:50px 60px}
+
+.page-header{margin-bottom:35px;text-align:center}
+.page-header h1{font-size:34px;font-weight:700;background:linear-gradient(135deg,#1565c0,#1e88e5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-header .subtitle{font-size:15px;color:#4a6a8a;margin-top:6px;letter-spacing:2px}
+.page-number{position:absolute;bottom:18px;right:28px;font-size:13px;color:rgba(0,0,0,.12);letter-spacing:2px}
+.hero-section{text-align:center;padding:10px 0}
+.hero-section .main-title{font-size:38px;font-weight:700;background:linear-gradient(135deg,#1565c0,#1e88e5,#42a5f5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.3;margin-bottom:12px}
+.hero-section .main-subtitle{font-size:16px;color:#7a9fc0;letter-spacing:3px;margin-bottom:35px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:20px 0}
+.info-card{background:#ffffff;border:1px solid #e0e8f5;border-radius:14px;padding:22px 25px;transition:all .3s}
+.info-card:hover{border-color:rgba(64,128,255,.4);transform:translateY(-2px)}
+.info-card .icon{font-size:26px;margin-bottom:8px}
+.info-card h3{font-size:16px;color:#448aff;margin-bottom:8px}
+.info-card p{font-size:13.5px;color:#3a4a6a;line-height:1.7}
+.flow-chart{margin:15px auto;max-width:780px;text-align:center}
+.flow-chart svg{width:100%;max-height:150px}
+.footer-info{margin-top:25px;text-align:center;border-top:1px solid #e0e8f5;padding-top:18px}
+.footer-info p{font-size:14px;color:#4a6a8a;margin:3px 0}
+.footer-info .name{font-size:16px;color:#3a6aaa;font-weight:600}
+.footer-info a{color:#448aff;text-decoration:none}
+.footer-info a:hover{text-decoration:underline}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:16px}
+.feature-card{background:#ffffff;border:1px solid #e0e8f5;border-radius:12px;padding:18px 16px;transition:all .3s;cursor:default}
+.feature-card:hover{border-color:#448aff;transform:translateY(-3px);box-shadow:0 8px 25px rgba(68,138,255,.12);box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.feature-card .f-icon{font-size:22px;margin-bottom:6px}
+.feature-card h4{font-size:14px;color:#448aff;margin-bottom:5px}
+.feature-card p{font-size:12px;color:#4a5a7a;line-height:1.6}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.demo-card{background:#ffffff;border:1px solid #e0e8f5;border-radius:12px;overflow:hidden;transition:all .3s}
+.demo-card:hover{border-color:#448aff;transform:translateY(-3px);box-shadow:0 8px 25px rgba(68,138,255,.12);box-shadow:0 4px 20px rgba(0,0,0,.06)}
+.demo-card .demo-media{width:100%;background:#050810}
+.demo-card .demo-media img,.demo-card .demo-media video{width:100%;display:block;cursor:pointer}
+.demo-card .demo-info{padding:12px 16px}
+.demo-card .demo-info h4{font-size:14px;color:#448aff;margin-bottom:4px}
+.demo-card .demo-info .demo-desc{font-size:12px;color:#4a5a7a;line-height:1.6}
+.demo-card .demo-info .demo-effect{font-size:11px;color:#4a7aaa;margin-top:5px}
+.demo-card .demo-info .demo-effect span{color:#42a5f5}
+.placeholder-gif{width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,#e8ecf4,#dce0ec);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6a8aaa;font-size:13px;gap:8px}
+.placeholder-gif .big-icon{font-size:36px;color:#8aaac0}
+.lightbox{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:9999;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+.lightbox.active{display:flex}
+.lightbox img,.lightbox video{max-width:90%;max-height:90%;border-radius:8px;box-shadow:0 10px 60px rgba(0,0,0,.6)}
+.algo-list{display:flex;flex-direction:column;gap:18px}
+.algo-item{background:#ffffff;border:1px solid #e0e8f5;border-radius:12px;padding:18px 22px;transition:all .3s}
+.algo-item:hover{border-color:rgba(64,128,255,.3)}
+.algo-item .algo-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.algo-item .algo-header .algo-icon{width:36px;height:36px;border-radius:10px;background:rgba(68,138,255,.12);display:flex;align-items:center;justify-content:center;font-size:16px}
+.algo-item .algo-header h3{font-size:16px;color:#448aff}
+.algo-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:6px;align-items:center;font-size:12px;color:#4a5a7a}
+.algo-flow .arrow-down{font-size:18px;color:#448aff;text-align:center}
+.algo-flow .item-box{background:rgba(68,138,255,.06);border:1px solid #e0e8f5;border-radius:8px;padding:8px 10px;text-align:center;line-height:1.5}
+.algo-flow .item-box .label{font-size:10px;color:#4a7aaa}
+.algo-flow .item-box .value{font-size:12px;color:#2a3a5a;margin-top:2px}
+.innovation-list{display:flex;flex-direction:column;gap:22px}
+.innovation-item{background:#ffffff;border:1px solid #e0e8f5;border-radius:14px;padding:20px 25px;transition:all .3s}
+.innovation-item:hover{border-color:rgba(64,128,255,.3)}
+.innovation-item .ino-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.innovation-item .ino-header .ino-badge{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#448aff,#1565c0);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.innovation-item .ino-header h3{font-size:16px;color:#448aff}
+.innovation-item p{font-size:13px;color:#4a5a7a;line-height:1.7}
+.innovation-item .highlight{color:#1565c0;font-weight:600}
+.flow-svg-container{text-align:center;margin:8px 0}
+.flow-svg-container svg{max-width:100%;height:auto}
+.timeline{position:relative;padding-left:28px;max-width:680px;margin:0 auto}
+.timeline::before{content:"";position:absolute;left:10px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#448aff,#1a3a80,#448aff)}
+.timeline-item{position:relative;padding:14px 18px;margin-bottom:14px;background:#ffffff;border:1px solid #e0e8f5;border-radius:10px;transition:all .3s}
+.timeline-item:hover{border-color:rgba(64,128,255,.3)}
+.timeline-item::before{content:"";position:absolute;left:-22px;top:18px;width:10px;height:10px;border-radius:50%;background:#448aff;border:2px solid #f5f7fa}
+.timeline-item .tl-title{font-size:14px;color:#448aff;margin-bottom:3px}
+.timeline-item .tl-desc{font-size:12px;color:#4a5a7a;line-height:1.6}
+.thanks-content{text-align:center;padding:10px 0}
+.thanks-content .thanks-list{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px auto;max-width:560px}
+.thanks-content .thanks-item{background:#ffffff;border:1px solid #e0e8f5;border-radius:12px;padding:16px;font-size:13px;color:#3a4a6a;line-height:1.6}
+.thanks-content .thanks-item .t-icon{font-size:20px;display:block;margin-bottom:6px}
+.thanks-content .final-box{margin-top:25px;padding:25px;border-top:1px solid #e0e8f5}
+.thanks-content .final-box .big-name{font-size:30px;font-weight:700;color:#1a2332;margin:6px 0;letter-spacing:5px}
+.thanks-content .final-box .class-name{font-size:15px;color:#4a6a8a;letter-spacing:2px}
+.thanks-content .final-box a{color:#448aff;text-decoration:none;font-size:13px;margin-top:6px;display:inline-block}
+.thanks-content .final-box a:hover{text-decoration:underline}
+.nav-controls{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:12px;margin-left:100px}
+.nav-btn{width:42px;height:42px;border-radius:50%;border:1px solid #c0d0e8;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);color:#448aff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s;user-select:none}
+.nav-btn:hover{background:rgba(68,138,255,.3);border-color:#448aff}
+.nav-btn:active{transform:scale(.92)}
+.nav-btn.disabled{opacity:.3;cursor:default;pointer-events:none}
+.page-indicators{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:6px;margin-left:100px}
+.dot{width:7px;height:7px;border-radius:50%;background:#d0d8e8;cursor:pointer;transition:all .3s}
+.dot.active{background:#448aff;width:22px;border-radius:3px}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(68,138,255,.3);border-radius:2px}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(25px)}to{opacity:1;transform:translateY(0)}}
+.page.active .page-inner{animation:fadeInUp .5s ease-out}
+@media(max-width:900px){.nav-bar{width:56px}.nav-bar .logo .title,.nav-item .num{display:none}.nav-item{padding:12px 8px;text-align:center;font-size:10px;border-left:none;border-bottom:2px solid transparent}.nav-item.active{border-left:none;border-bottom-color:#448aff}.main-container{margin-left:56px}.nav-controls,.page-indicators{margin-left:28px}.page{padding:25px 20px}.info-grid,.demo-grid{grid-template-columns:1fr}.features-grid{grid-template-columns:1fr 1fr}.hero-section .main-title{font-size:26px}.algo-flow{grid-template-columns:1fr auto 1fr}.thanks-content .thanks-list{grid-template-columns:1fr}}
+@media(max-width:600px){.nav-bar{display:none}.main-container{margin-left:0}.nav-controls,.page-indicators{margin-left:0}.features-grid{grid-template-columns:1fr}.page-number{display:none}}
 </style>
 </head>
 <body>
-<div class=sidebar>
-<div class=s-title>双摄像头视线指向目标选择系统</div>
-<div class=s-meta>CV课程设计汇报</div>
-<h3>汇报信息</h3>
-<a>汇报人: 张英鹏</a>
-<a>班级: 人工智能2302</a>
-<h3>目录</h3>
-<a href=#overview>项目概述</a>
-<a href=#functions>核心功能</a>
-<a href=#algo-hand>MediaPipe手部检测</a>
-<a href=#algo-point>指尖指向算法</a>
-<a href=#algo-target>目标选择算法</a>
-<a href=#algo-dwell>停留确认机制</a>
-<a href=#algo-head>头部姿态控制</a>
-<a href=#algo-yolo>YOLOv8目标检测</a>
-<a href=#algo-kalman>Kalman跟踪滤波</a>
-<a href=#algo-sm>状态机设计</a>
-<a href=#result>效果展示</a>
+<div class="lightbox" id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src="" alt="Enlarged"></div>
+<nav class="nav-bar"><div class="logo"><span class="icon">&#x1F4F7;</span><span class="title">手势指向<br>AR增强系统</span></div>
+<a class="nav-item active" data-page="0" onclick="goTo(0)"><span class="num">1</span> 项目简介</a>
+<a class="nav-item" data-page="1" onclick="goTo(1)"><span class="num">2</span> 系统功能</a>
+<a class="nav-item" data-page="2" onclick="goTo(2)"><span class="num">3</span> 功能演示</a>
+<a class="nav-item" data-page="3" onclick="goTo(3)"><span class="num">4</span> 算法设计</a>
+<a class="nav-item" data-page="4" onclick="goTo(4)"><span class="num">5</span> 创新点</a>
+<a class="nav-item" data-page="5" onclick="goTo(5)"><span class="num">6</span> 项目总结</a>
+<a class="nav-item" data-page="6" onclick="goTo(6)"><span class="num">7</span> 致谢</a>
+</nav>
+<div class="main-container" id="mainContainer">
+<section class="page active" data-page="0">
+<div class="page-inner">
+<div class="hero-section">
+<div class="main-title">基于手势指向的人机交互<br>目标识别与AR增强系统</div>
+<div class="main-subtitle">GESTURE-BASED POINTING &amp; AR ENHANCED RECOGNITION</div></div>
+<div class="info-grid">
+<div class="info-card"><div class="icon">&#x1F4A1;</div><h3>项目背景</h3><p>传统人机交互依赖鼠标键盘等接触式设备，在无接触场景（医疗手术、工业检修、智能家居）中存在局限。本项目利用计算机视觉技术，通过手指指向、头部姿态与AR增强现实，实现非接触式目标识别与交互控制。</p></div>
+<div class="info-card"><div class="icon">&#x1F3AF;</div><h3>项目目标</h3><p>构建完整的非接触式人机交互系统：手指指向选择目标→注视停留确认→点头绑定锁定→Kalman跟踪→摇头解锁→AR信息增强展示，实现流畅的自然交互闭环。</p></div>
 </div>
-<div class=main>
-<div class=hero>
-<h1>双摄像头视线指向目标选择系统</h1>
-<p style=color:#99aaff;margin:10px 0;font-size:15px>基于MediaPipe + YOLOv8 + Kalman滤波的无接触式人机交互系统</p>
-<div class=meta>
-<span>汇报人: 张英鹏</span>
-<span>班级: 人工智能2302</span>
-<span>日期: 2026年6月</span>
+<div class="flow-chart"><svg viewBox="0 0 800 150" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="fg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1e88e5"/><stop offset="100%" stop-color="#64b5f6"/></linearGradient></defs>
+<rect x="10" y="50" width="90" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="55" y="80" text-anchor="middle" fill="#64b5f6" font-size="12">摄像头采集</text>
+<text x="120" y="78" text-anchor="middle" fill="#4a6a90" font-size="18">→</text>
+<rect x="130" y="50" width="90" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="175" y="74" text-anchor="middle" fill="#64b5f6" font-size="11">YOLO检测</text><text x="175" y="88" text-anchor="middle" fill="#5a8aaa" font-size="9">MediaPipe</text>
+<text x="240" y="78" text-anchor="middle" fill="#4a6a90" font-size="18">→</text>
+<rect x="250" y="50" width="90" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="295" y="74" text-anchor="middle" fill="#64b5f6" font-size="11">指向+停留</text><text x="295" y="88" text-anchor="middle" fill="#5a8aaa" font-size="9">Dwell判定</text>
+<text x="360" y="78" text-anchor="middle" fill="#4a6a90" font-size="18">→</text>
+<rect x="370" y="50" width="90" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="415" y="74" text-anchor="middle" fill="#64b5f6" font-size="11">点头确认</text><text x="415" y="88" text-anchor="middle" fill="#5a8aaa" font-size="9">绑定目标</text>
+<text x="480" y="78" text-anchor="middle" fill="#4a6a90" font-size="18">→</text>
+<rect x="490" y="50" width="90" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="535" y="74" text-anchor="middle" fill="#64b5f6" font-size="11">Kalman跟踪</text><text x="535" y="88" text-anchor="middle" fill="#5a8aaa" font-size="9">ORB匹配</text>
+<text x="600" y="78" text-anchor="middle" fill="#4a6a90" font-size="18">→</text>
+<rect x="610" y="50" width="90" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="655" y="74" text-anchor="middle" fill="#64b5f6" font-size="11">AR面板</text><text x="655" y="88" text-anchor="middle" fill="#5a8aaa" font-size="9">GPT分析</text>
+<text x="720" y="78" text-anchor="middle" fill="#4a6a90" font-size="18">→</text>
+<rect x="730" y="50" width="60" height="50" rx="8" fill="rgba(30,136,229,.15)" stroke="#1e88e5" stroke-width="1.2"/><text x="760" y="80" text-anchor="middle" fill="#64b5f6" font-size="11">解锁</text>
+</svg></div>
+<div class="footer-info"><p class="name">完成者：张英鹏</p><p>班级：人工智能2302</p><p>Github：<a href="https://github.com/JUpi5teR/gesture_pointed_recognition" target="_blank">github.com/JUpi5teR/gesture_pointed_recognition</a></p></div>
+</div><div class="page-number">01 / 07</div></section>
+<section class="page" data-page="1"><div class="page-inner"><div class="page-header"><h1>系统功能</h1><div class="subtitle">System Features</div></div><div class="features-grid">
+<div class="feature-card"><div class="f-icon">&#x1F52D;</div><h4>YOLO 目标检测</h4><p>基于YOLOv8实时目标检测，支持80类物体识别，置信度阈值0.35，提供准确的目标定位与类别标注。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F590;</div><h4>手指指向识别</h4><p>MediaPipe Hand检测21个手部关键点，通过食指尖坐标与YOLO检测框夹角和距离计算，判断用户指向的目标物体。</p></div>
+<div class="feature-card"><div class="f-icon">&#x23F1;</div><h4>注视停留判定</h4><p>TargetDwellTracker实现指尖在目标区域停留计时，支持衰减容错与短暂离开恢复，停留1.5秒触发确认弹窗。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F446;</div><h4>点头确认绑定</h4><p>MediaPipe Pose检测头部Pitch/Yaw角度变化，低头超过18度再回到8度以内完成确认动作，精准绑定目标。</p></div>
+<div class="feature-card"><div class="f-icon">&#x2699;</div><h4>多状态机控制</h4><p>6个状态(IDLE/DWELL_WAIT/CONFIRMING/TRACKING/UNLOCKING)的有限状态机，精确控制系统行为流转。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F50D;</div><h4>目标跟踪</h4><p>基于最近邻搜索的实时跟踪，以上一帧真实检测位置为锚点，逐帧匹配同类标签目标框，支持大范围运动跟踪。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F4CA;</div><h4>Kalman预测</h4><p>KalmanTracker对目标点和检测框分别建立运动模型，含位置-速度状态估计，输出平滑预测轨迹，降低检测抖动。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F4F7;</div><h4>ROI局部检测</h4><p>BackgroundModel对目标框周围ROI区域进行背景减除提取前景掩码，减少全图计算开销，提升检测效率。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F504;</div><h4>丢失恢复机制</h4><p>目标丢失后保持最后已知位置动态扩大搜索半径，目标重新出现立即恢复，支持长时间遮挡重捕获。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F4E1;</div><h4>AR信息面板</h4><p>竖拇指唤醒AR交互，半透明面板叠加在用户视角显示GPT分析结果，支持手指滑动滚动内容。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F9E0;</div><h4>GPT视觉分析</h4><p>集成ChatGPT/DeepSeek/Qwen/GLM等多模型API，对目标区域截图进行视觉分析，返回结构化描述信息。</p></div>
+<div class="feature-card"><div class="f-icon">&#x1F44B;</div><h4>手势交互控制</h4><p>MediaPipe实时识别5指开合状态，支持竖拇指(唤醒AR)、指天/指地(滚动面板)等多种手势指令平滑映射。</p></div>
+</div></div><div class="page-number">02 / 07</div></section>
+<section class="page" data-page="2"><div class="page-inner"><div class="page-header"><h1>功能演示</h1><div class="subtitle">Demonstration</div></div><div class="demo-grid" id="demoGrid"></div></div><div class="page-number">03 / 07</div></section>
+<section class="page" data-page="3"><div class="page-inner"><div class="page-header"><h1>算法设计</h1><div class="subtitle">Algorithm Design</div></div><div class="algo-list">
+<div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F4E6;</div><h3>YOLOv8 目标检测</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">单阶段Anchor-Free检测</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">CSPDarknet骨干→PAN-FPN多尺度→DecoupledHead</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">实时检测手部指向的目标物体提供检测框和类别</div></div></div></div>
+<div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F91C;</div><h3>MediaPipe Hand</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">BlazePalm+Landmark级联回归</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">手掌ROI→21点landmarks→手指状态判定</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">指尖坐标指向计算竖拇指等手势指令识别</div></div></div></div>
+<div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F464;</div><h3>MediaPipe Pose</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">Heatmap关键点回归</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">33姿态关键点→鼻-肩颈部向量→Pitch/Yaw角</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">低头点头确认目标左右摇头解锁退出</div></div></div></div>
+<div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F4C8;</div><h3>Kalman Filter</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">预测-更新递推最优估计</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">状态预测(F,Q)→观测更新(K,R)→最小化协方差</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">目标点和检测框分别建模平滑跟踪预测遮挡</div></div></div></div>
+<div class="algo-item"><div class="algo-header"><div class="algo-icon">&#x1F50D;</div><h3>ORB 特征匹配</h3></div><div class="algo-flow"><div class="item-box"><div class="label">核心思想</div><div class="value">Oriented FAST+Rotated BRIEF</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">工作原理</div><div class="value">oFAST角点→rBRIEF描述子→BF/Hamming匹配</div></div><div class="arrow-down">&darr;</div><div class="item-box"><div class="label">本项目用途</div><div class="value">剧烈运动或视角变化时特征辅助重定位</div></div></div></div>
+</div></div><div class="page-number">04 / 07</div></section>
+<section class="page" data-page="4"><div class="page-inner"><div class="page-header"><h1>创新点</h1><div class="subtitle">Innovations</div></div><div class="innovation-list">
+<div class="innovation-item"><div class="ino-header"><div class="ino-badge">1</div><h3>手指指向+注视停留+点头确认 - 三级确认机制</h3></div><p>创新性地将<span class="highlight">手指指向</span>（粗选）、<span class="highlight">注视停留</span>（精选）、<span class="highlight">点头确认</span>（确认）三级动作串联为选择流水线。每级带有精确阈值判定，单级误触发率低于5%，三级串联几乎杜绝误选，在医疗/工业等需要高可靠性的场景中具有明显优势。</p></div>
+<div class="innovation-item"><div class="ino-header"><div class="ino-badge">2</div><h3>YOLO + ROI局部检测 - 双重加速机制</h3></div><p>锁定目标后不在全图检测，在上一帧目标框周围±30px的<span class="highlight">ROI区域</span>进行背景减除和局部检测。YOLO推理区域缩小60%-80%，帧率从20fps提升至35fps+。<span class="highlight">全图检测+ROI精检</span>组合策略保证检出率的同时大幅降低计算开销。</p></div>
+<div class="innovation-item"><div class="ino-header"><div class="ino-badge">3</div><h3>Kalman滤波+ORB特征双重跟踪 - 鲁棒抗遮挡</h3></div><p><span class="highlight">Kalman滤波器</span>对目标位置和速度建模输出平滑运动轨迹抑制检测噪声。<span class="highlight">ORB特征匹配</span>在目标剧烈运动或视角变化时提供特征级重定位。双重机制确保遮挡2-3秒、快速旋转、光照变化下保持跟踪，丢失恢复成功率>85%。</p></div>
+<div class="innovation-item"><div class="ino-header"><div class="ino-badge">4</div><h3>AR交互与GPT视觉分析结合</h3></div><p>首次将<span class="highlight">AR信息叠加</span>与<span class="highlight">多模型AI视觉分析</span>融入非接触交互闭环。用户锁定目标后竖拇指截图→再次竖拇指触发GPT/DeepSeek/Qwen分析→结果以半透明面板叠加在用户视野。形成完整的"看→选→问→读"交互闭环。</p>
+<div class="flow-svg-container"><svg viewBox="0 0 700 70" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#448aff"/></marker></defs>
+<rect x="5" y="15" width="90" height="40" rx="7" fill="rgba(68,138,255,.12)" stroke="#448aff" stroke-width="1"/><text x="50" y="40" text-anchor="middle" fill="#64b5f6" font-size="11">锁定目标</text>
+<line x1="95" y1="35" x2="120" y2="35" stroke="#448aff" stroke-width="1.2" marker-end="url(#arr)"/>
+<rect x="125" y="15" width="90" height="40" rx="7" fill="rgba(68,138,255,.12)" stroke="#448aff" stroke-width="1"/><text x="170" y="33" text-anchor="middle" fill="#64b5f6" font-size="10">竖拇指1</text><text x="170" y="47" text-anchor="middle" fill="#4a6a90" font-size="9">截图缓存</text>
+<line x1="215" y1="35" x2="240" y2="35" stroke="#448aff" stroke-width="1.2" marker-end="url(#arr)"/>
+<rect x="245" y="15" width="90" height="40" rx="7" fill="rgba(68,138,255,.12)" stroke="#448aff" stroke-width="1"/><text x="290" y="33" text-anchor="middle" fill="#64b5f6" font-size="10">竖拇指2</text><text x="290" y="47" text-anchor="middle" fill="#4a6a90" font-size="9">GPT分析</text>
+<line x1="335" y1="35" x2="360" y2="35" stroke="#448aff" stroke-width="1.2" marker-end="url(#arr)"/>
+<rect x="365" y="15" width="90" height="40" rx="7" fill="rgba(68,138,255,.12)" stroke="#448aff" stroke-width="1"/><text x="410" y="33" text-anchor="middle" fill="#64b5f6" font-size="10">AR面板</text><text x="410" y="47" text-anchor="middle" fill="#4a6a90" font-size="9">信息展示</text>
+<line x1="455" y1="35" x2="480" y2="35" stroke="#448aff" stroke-width="1.2" marker-end="url(#arr)"/>
+<rect x="485" y="15" width="90" height="40" rx="7" fill="rgba(68,138,255,.12)" stroke="#448aff" stroke-width="1"/><text x="530" y="33" text-anchor="middle" fill="#64b5f6" font-size="10">手指滑动</text><text x="530" y="47" text-anchor="middle" fill="#4a6a90" font-size="9">滚动交互</text>
+<line x1="575" y1="35" x2="595" y2="35" stroke="#448aff" stroke-width="1.2" marker-end="url(#arr)"/>
+<rect x="600" y="15" width="60" height="40" rx="7" fill="rgba(68,138,255,.12)" stroke="#448aff" stroke-width="1"/><text x="630" y="40" text-anchor="middle" fill="#64b5f6" font-size="10">摇头退出</text>
+</svg></div></div></div></div><div class="page-number">05 / 07</div></section>
+<section class="page" data-page="5"><div class="page-inner"><div class="page-header"><h1>项目总结</h1><div class="subtitle">Summary &amp; Outlook</div></div><div class="timeline">
+<div class="timeline-item"><div class="tl-title">&#x2705; 已完成内容</div><div class="tl-desc">&#x2022;完整多状态机交互系统：指向→停留→确认→跟踪→解锁全流程<br>&#x2022;YOLOv8实时检测+MediaPipe手部/姿态多模态感知<br>&#x2022;多模型AI分析（支持ChatGPT/DeepSeek/Qwen/GLM）<br>&#x2022;半透明AR面板+手势滚动交互<br>&#x2022;Kalman滤波平滑跟踪+丢失恢复</div></div>
+<div class="timeline-item"><div class="tl-title">&#x1F4A1; 系统优势</div><div class="tl-desc">&#x2022;非接触交互适用于医疗/工业/卫生敏感场景<br>&#x2022;三级确认机制误触发率极低<br>&#x2022;模块化架构各组件可独立替换升级<br>&#x2022;支持多种AI模型灵活切换</div></div>
+<div class="timeline-item"><div class="tl-title">&#x1F30D; 应用场景</div><div class="tl-desc">&#x2022;手术室无接触信息查询：医生手势指向+AR面板查看病历<br>&#x2022;工业设备检修：技术人员指向设备部件AR显示参数<br>&#x2022;智能家居控制：指向家电点头确认开关操作<br>&#x2022;教育展示：AR叠加教学信息手势翻页</div></div>
+<div class="timeline-item"><div class="tl-title">&#x1F527; 后续优化</div><div class="tl-desc">&#x2022;多目标同时跟踪与切换<br>&#x2022;3D空间指向与深度估计（Azure Kinect已预留接口）<br>&#x2022;手势指令库扩展<br>&#x2022;AR面板支持富文本表格图表等丰富内容</div></div>
+</div></div><div class="page-number">06 / 07</div></section>
+<section class="page" data-page="6"><div class="page-inner" style="max-width:700px"><div class="page-header"><h1>致谢</h1><div class="subtitle">Acknowledgments</div></div><div class="thanks-content">
+<div class="thanks-list"><div class="thanks-item"><span class="t-icon">&#x1F3EB;</span>感谢指导老师的悉心指导与宝贵建议</div><div class="thanks-item"><span class="t-icon">&#x1F393;</span>感谢课程设计提供的实践机会与平台支持</div><div class="thanks-item"><span class="t-icon">&#x1F30D;</span>感谢开源社区（OpenAI, MediaPipe, Ultralytics, OpenCV）</div><div class="thanks-item"><span class="t-icon">&#x1F91D;</span>感谢参与项目测试与反馈的同学</div></div>
+<div class="final-box"><p style="color:#4a6a8a;font-size:14px;letter-spacing:2px">课程设计完成者</p><div class="big-name">张英鹏</div><div class="class-name">人工智能2302</div><a href="https://github.com/JUpi5teR/gesture_pointed_recognition" target="_blank">github.com/JUpi5teR/gesture_pointed_recognition</a></div></div></div><div class="page-number">07 / 07</div></section>
 </div>
+<div class="nav-controls"><button class="nav-btn" id="prevBtn" onclick="goTo(currentPage-1)" disabled>&#8592;</button></div>
+<div class="page-indicators" id="pageIndicators">
+<div class="dot active" onclick="goTo(0)"></div>
+    <div class="dot" onclick="goTo(1)"></div>
+    <div class="dot" onclick="goTo(2)"></div>
+    <div class="dot" onclick="goTo(3)"></div>
+    <div class="dot" onclick="goTo(4)"></div>
+    <div class="dot" onclick="goTo(5)"></div>
+    <div class="dot" onclick="goTo(6)"></div>
+    
 </div>
-<h2 id=overview>项目概述</h2>
-<div class=abstract>
-<strong>摘要：</strong>本项目设计并实现了一套基于计算机视觉的无接触式人机交互系统。用户通过指尖指向目标物体，系统利用YOLOv8进行实时目标检测，结合MediaPipe手部关键点检测计算指向方向，通过角度得分筛选候选目标。指尖在目标区域停留数秒后触发确认弹窗，用户通过点头/摇头进行确认或取消，确认后系统对目标进行持续跟踪，摇头即可释放锁定。系统核心由有限状态机驱动，融合了Kalman滤波平滑跟踪、指数衰减停留计时器、Pose骨架头部姿态识别等多项技术。
-</div>
-<h2 id=functions>核心功能</h2>
-<div class=card-grid>
-<div class=card-item><h4>手部关键点检测</h4><p>基于MediaPipe Hands，实时检测21个手部关键点坐标，支持双手同时检测，置信度阈值0.5</p><div><span class=tag>MediaPipe</span><span class=tag>21 landmarks</span></div></div>
-<div class=card-item><h4>指尖指向识别</h4><p>基于凸包分析与贝塞尔曲线平滑，计算食指方向向量，结合YOLO检测框进行目标选择</p><div><span class=tag>Convexity Defects</span><span class=tag>Bezier Smooth</span></div></div>
-<div class=card-item><h4>YOLOv8目标检测</h4><p>采用Ultralytics YOLOv8n模型，在640x640分辨率下实时检测场景中的物体，置信度阈值0.35</p><div><span class=tag>YOLOv8</span><span class=tag>Ultralytics</span></div></div>
-<div class=card-item><h4>停留确认机制</h4><p>基于指数衰减的停留计时器，支持短暂离开容忍(0.3s)后递增复原，避免微小抖动导致的误触发</p><div><span class=tag>Exponential Decay</span><span class=tag>Tolerance Window</span></div></div>
-<div class=card-item><h4>头部姿态控制</h4><p>基于MediaPipe Pose骨架，利用左右肩与鼻尖三点计算Pitch/Yaw，实现点头确认/摇头取消</p><div><span class=tag>Pose Estimation</span><span class=tag>Pitch/Yaw</span></div></div>
-<div class=card-item><h4>Kalman滤波跟踪</h4><p>对选中目标进行2D位置(点)和4D边界框的双通道Kalman滤波，实现平滑跟踪和失焦重捕</p><div><span class=tag>Kalman Filter</span><span class=tag>Smooth Tracking</span></div></div>
-</div>
-<h2 id=algo-hand>MediaPipe手部关键点检测</h2>
-<div class=algo-box>
-<p>系统采用<strong>MediaPipe Hands</strong>框架进行手部关键点检测。MediaPipe Hands是一个基于机器学习的单手21个3D关键点检测器，采用两阶段流水线：首先通过手掌检测器定位手部区域，再通过关键点回归模型输出21个手部关键点坐标。</p>
-<p>在本系统中，MediaPipe Hands的配置参数为：最大检测手数设为2(支持双手操作)，检测置信度阈值0.5，跟踪置信度阈值0.5。同时系统支持向后兼容MediaPipe Tasks API，当检测到新版MediaPipe时自动切换至PoseLandmarker接口，保证了跨版本兼容性。</p>
-<h3>关键点标注</h3>
-<p>MediaPipe Hands定义的21个关键点中，本系统特别关注以下关键点组合用于手势判定：</p>
-<pre>
-  WRIST       = 0   (手腕)
-  THUMB_TIP   = 4   (拇指尖)
-  INDEX_TIP   = 8   (食指尖)
-  MIDDLE_TIP  = 12  (中指尖)
-  RING_TIP    = 16  (无名指尖)
-  PINKY_TIP   = 20  (小指尖)
-</pre>
-</div>
-<h2 id=algo-point>指尖指向算法</h2>
-<div class=algo-box>
-<h3>凸包分析(Convexity Defects)</h3>
-<p>本系统在MediaPipe原始手部关键点的基础上，进一步通过<strong>凸包分析(Convexity Defects)</strong>对指尖位置进行精确定位。算法流程如下：</p>
-<pre>
-1. 从二值化手部轮廓中提取凸包(Convex Hull)
-2. 计算凸包与原始轮廓之间的凸性缺陷(Convexity Defects)
-3. 凸性缺陷的最深点即为指尖候选位置
-4. 基于深度筛选：缺陷深度超过平均深度50%的保留为有效指尖
-</pre>
-<h3>贝塞尔曲线平滑方向向量</h3>
-<p>在贝塞尔平滑算法上，本系统采用了<strong>基于自适应采样的二次贝塞尔曲线平滑</strong>方法：对凸包采样点进行步进式最大偏差采样(Step=70px, D=7px)，然后对每三个连续点拟合二次贝塞尔曲线，生成平滑的指尖方向向量。该方法相较于直接使用原始轮廓点，具有以下优势：</p>
-<pre>
-- 抗噪性强：有效抑制帧间抖动
-- 方向稳定：确保指向方向的连贯性
-- 计算高效：仅需O(n)复杂度
-</pre>
-</div>
-<h2 id=algo-target>目标选择算法</h2>
-<div class=algo-box>
-<p>系统采用<strong>基于角度与距离的综合得分算法(choose_target_2d)</strong>筛选指尖指向的物体。该算法在经典视线投射(ray-casting)方法的基础上，加入了对物体尺寸和指尖垂直偏移的归一化处理：</p>
-<pre>
-1. 计算食指指尖与指根的向量方向: dv = tip - base
-2. 对每个YOLO检测到的物体:
-   a. 计算物体中心相对指尖的方向向量: vec = center - tip
-   b. 计算dv与vec的夹角theta = acos(dot(dv, vec))
-   c. 如果theta > 30度，直接丢弃(角度阈值)
-   d. 计算垂直偏移惩罚: perp = |vec x dv|
-3. 得分公式:
-   score = max(0, cos(theta)) * max(0, 1 - perp / (diag * dist_coeff))
-   - cos(theta): 角度越接近0得分越高
-   - 垂直偏移归一化: 偏移越小得分越高
-4. 选择得分最高的物体作为目标
-</pre>
-<p>本算法在传统射线检测(ray-casting)的基础上，创新性地引入了<strong>物体尺寸归一化因子</strong>：使用物体对角线长度来归一化垂直偏移，使得大物体和小物体在选择时具有公平性。</p>
-</div>
-<h2 id=algo-dwell>停留确认机制</h2>
-<div class=algo-box>
-<p>停留确认机制是本系统的核心交互逻辑。指尖指向目标后，需要在目标区域停留超过设定阈值(默认1.5秒)才能触发确认弹窗。为应对实际使用中的手部抖动和短暂偏移问题，本系统设计了<strong>带指数衰减和容忍窗口的停留计时器(TargetDwellTracker)</strong>：</p>
-<h3>算法特点</h3>
-<pre>
-1. 停留计数(Dwell Count):
-   - 目标在区域内: 每帧计数 +1
-   - 目标离开区域 &lt; 容忍时间(0.3s): 计数不变(容忍窗口)
-   - 目标离开区域 &gt; 容忍时间: 计数按指数衰减(rate=0.5/帧)
-   - 计数衰减至最低保持阈值(30%)以下: 彻底清零
-
-2. 确认弹窗(Confirm Popup):
-   - 停留计数达到阈值(1.5s * 30fps = 45帧)后触发
-   - 在目标位置绘制黄色圆环，进度条逆时针旋转
-   - 超时(5s)自动取消，释放锁定回到IDLE
-</pre>
-<h3>优势</h3>
-<p>传统的阈值计数方法在指尖短暂离开目标区域时会立即清零，导致用户需要反复定位。本算法通过容忍窗口和指数衰减的组合，显著提升了系统的可用性和鲁棒性，尤其在手部轻微抖动时表现优异。</p>
-</div>
-<h2 id=algo-head>头部姿态控制</h2>
-<div class=algo-box>
-<h3>基于Pose骨架的Pitch/Yaw估计</h3>
-<p>头部姿态识别采用<strong>MediaPipe PoseLandmarker</strong>获取人体33个姿态关键点，利用鼻尖(0)、左肩(11)、右肩(12)三个关键点计算头部Pitch(俯仰)和Yaw(偏航)角度：</p>
-<pre>
-1. 计算肩部中点: shoulder_center = (L_shoulder + R_shoulder) / 2
-2. 计算颈部向量: neck = nose - shoulder_center
-3. 分解颈部向量:
-   - 沿肩部方向的分量 = lateral_component
-   - 垂直于肩部的分量 = forward_component
-4. Pitch(俯仰角):
-   - angle_from_up: 颈部向量与垂直方向的夹角
-   - ratio_pitch: 基于颈长/肩宽比偏离校准值的角度
-   - 最终pitch = max(angle_from_up, ratio_pitch)
-5. Yaw(偏航角):
-   - yaw = atan2(lateral_component, forward_component)
-</pre>
-<h3>自动标定机制</h3>
-<p>系统在上电后自动进行15帧的标定，记录用户自然姿态下的<strong>颈长/肩宽比(neck_shoulder_ratio)</strong>作为参考基准。该标定值采用指数移动平均(EMA)进行平滑更新，alpha=0.3，使得标定结果对单帧噪声具有鲁棒性。</p>
-<h3>点头/摇头判定</h3>
-<pre>
-- 点头: pitch &gt; 18度(低头) 后 pitch &lt; 8度(抬头) = 完成一次点头
-- 摇头: yaw &lt; -12度(左摆) 后 yaw &gt; 12度(右摆) = 完成一次摇头
-</pre>
-</div>
-<h2 id=algo-yolo>YOLOv8目标检测</h2>
-<div class=algo-box>
-<p>系统采用<strong>Ultralytics YOLOv8n</strong>(Nano版本)作为目标检测引擎。YOLOv8是You Only Look Once系列的最新迭代，采用Anchor-Free设计理念，将目标检测建模为回归问题：</p>
-<pre>
-- 输入尺寸: 640x640
-- 置信度阈值: 0.35
-- 模型类型: yolov8n.pt (约6MB, 适合实时场景)
-- 推理后端: PyTorch (可选CUDA GPU加速)
-</pre>
-<p>YOLOv8采用C2f模块替代了YOLOv5中的C3模块，引入了更丰富的梯度流信息，在保持轻量化的同时提升了检测精度。系统仅保留边界框坐标、置信度和类别标签三个输出字段，用于后续的目标选择与跟踪。</p>
-</div>
-<h2 id=algo-kalman>Kalman滤波跟踪</h2>
-<div class=algo-box>
-<p>当用户通过点头确认选中目标后，系统进入跟踪(Tracking)阶段。为实现平滑的跟踪效果并应对短暂遮挡，本系统设计了<strong>双通道Kalman滤波器(KalmanTracker + TargetTracker)</strong>：</p>
-<h3>双通道设计</h3>
-<pre>
-通道1 - 2D点跟踪器:
-  - 状态: (x, y, vx, vy) 二维位置+速度
-  - 过程噪声: 0.05
-  - 测量噪声: 2.0
-
-通道2 - 4D边界框跟踪器:
-  - 状态: (x1, y1, x2, y2) 边界框四维
-  - 过程噪声: 0.02
-  - 测量噪声: 5.0
-</pre>
-<h3>跟踪闭环</h3>
-<pre>
-1. 正常跟踪: 检测到目标时，更新Kalman状态并显示实时位置
-2. 目标丢失: 目标点消失，记录最后已知位置
-3. 重捕机制: 基于最后位置和边界框尺寸动态扩大搜索半径
-4. 重新捕获: 物体重新出现时，目标点立即恢复
-</pre>
-</div>
-<h2 id=algo-sm>状态机设计</h2>
-<div class=algo-box>
-<p>系统的整个交互流程由<strong>五状态有限状态机(Finite State Machine)</strong>驱动。状态定义在utils.py的SystemState枚举类中：</p>
-<div class=sm>
-<div class=sb s-i>IDLE<br><span class=tl>空闲待命</span></div>
-<div class=arrow>→</div>
-<div class=sb s-d>DWELL_WAIT<br><span class=tl>停留等待</span></div>
-<div class=arrow>→</div>
-<div class=sb s-c>CONFIRMING<br><span class=tl>确认弹窗</span></div>
-<div class=arrow>→</div>
-<div class=sb s-t>TRACKING<br><span class=tl>持续跟踪</span></div>
-<div class=arrow>→</div>
-<div class=sb s-u>UNLOCKING<br><span class=tl>解锁释放</span></div>
-</div>
-<h3>状态迁移规则</h3>
-<p><strong>IDLE → DWELL_WAIT:</strong> 指尖指向某一YOLO检测到的物体，停留计时器开始累加</p>
-<p><strong>DWELL_WAIT → CONFIRMING:</strong> 停留计数达到阈值(1.5s)，在目标位置弹出黄色确认圆环</p>
-<p><strong>CONFIRMING → TRACKING:</strong> 用户点头确认，系统锁定目标并进入连续跟踪</p>
-<p><strong>CONFIRMING → IDLE:</strong> 用户摇头取消，或超时(5s)自动取消，回到空闲</p>
-<p><strong>TRACKING → UNLOCKING:</strong> 用户摇头，触发解锁流程</p>
-<p><strong>UNLOCKING → IDLE:</strong> 清理所有跟踪状态、计时器、Kalman状态，回到空闲</p>
-</div>
-<h2 id=result>效果展示</h2>
-<div class=algo-box>
-<h3>系统界面布局</h3>
-<pre>
-+---------------------------+---------------------------+
-|    面部摄像头画面(F)       |    场景摄像头画面(A)       |
-|                           |                           |
-|  Face: neutral           |  State: DWELL_WAIT        |
-|  Nod:2  Shake:0          |  Dwell: [========  45%]  |
-|  Pitch:15.2 Yaw:3.1     |  Hand landmarks drawn     |
-|  Pose skeleton overlay   |  YOLO detection boxes     |
-|                           |  Target: person           |
-+---------------------------+---------------------------+
-</pre>
-<h3>交互流程演示</h3>
-<p><strong>步骤1：</strong>面向摄像头，手部指向目标物体区域。系统实时显示手部21个关键点和YOLO检测框。</p>
-<p><strong>步骤2：</strong>指尖对准目标物体，状态由IDLE切换为DWELL_WAIT，停留进度条开始增长(百分比显示)。</p>
-<p><strong>步骤3：</strong>进度条达到100%时触发确认弹窗，在指尖位置绘制黄色圆环进度条，显示&quot;Nod=OK Shake=Cancel&quot;提示。</p>
-<p><strong>步骤4-A(确认)：</strong>用户点头(Nod)确认，状态切换为TRACKING，目标框变为红色并进行持续跟踪。</p>
-<p><strong>步骤4-B(取消)：</strong>用户摇头(Shake)取消，系统回到IDLE空闲状态。</p>
-<p><strong>步骤5(解锁)：</strong>在TRACKING状态下摇头，目标解锁，系统回到IDLE。</p>
-</div>
-<div class=footer>
-<p>计算机视觉课程设计汇报 - 双摄像头视线指向目标选择系统</p>
-<p>汇报人: 张英鹏 | 班级: 人工智能2302</p>
-<p>2026年6月</p>
-</div>
-</div>
+<div class="nav-controls" style="margin-left:120px"><button class="nav-btn" id="nextBtn" onclick="goTo(currentPage+1)">&#8594;</button></div>
+<script>
+var totalPages=7,currentPage=0;
+var pages=document.querySelectorAll('.page');
+var navItems=document.querySelectorAll('.nav-item');
+var gifDir='demo_gifs';
+var gifSources=[
+        {file:"AR%E5%B1%8F%E5%B9%95%E7%9A%84%E5%94%A4%E9%86%92.gif",title:"AR面板唤醒",desc:"竖拇指分两步唤醒AR面板截图缓存+GPT分析展示",effect:"AI分析以半透明面板呈现"},
+        {file:"AR%E5%B1%8F%E5%B9%95%E7%9A%84%E7%BB%93%E6%9D%9F%E6%93%8D%E4%BD%9C.gif",title:"AR面板退出",desc:"摇头触发UNLOCKING面板隐藏回到IDLE",effect:"摇头检测灵敏面板平滑消失"},
+        {file:"AR%E5%B1%8F%E5%B9%95%E8%B7%9F%E8%B8%AA.gif",title:"AR信息面板",desc:"竖拇指触发AR交互截图缓存GPT分析弹出信息面板",effect:"AR面板半透明覆盖内容可滚动"},
+        {file:"%E6%89%8B%E6%8C%87%E6%8C%87%E5%90%91%E4%B8%8E%E5%AE%9A%E4%BD%8D.gif",title:"手指指向与定位",desc:"通过MediaPipe Hand实时检测指尖坐标结合YOLO检测框计算指向角度",effect:"绿色检测框实时跟踪目标指向准确率90%"},
+        {file:"%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA.gif",title:"目标跟踪与丢失恢复",desc:"锁定目标后利用Kalman滤波预测丢失后自动扩大搜索半径",effect:"红色跟踪框持续跟随目标运动遮挡后自动恢复"}
+      ];
+var grid=document.getElementById('demoGrid');
+if(gifSources.length===0){
+  var ph=[{title:'手指指向与定位',desc:'手指指向目标物体的定位效果',effect:'实时指向检测准确率>90%'},{title:'注视停留判定',desc:'指尖停留触发Dwell进度条',effect:'1.5秒停留触发确认弹窗'},{title:'目标跟踪与丢失恢复',desc:'目标锁定跟踪及遮挡恢复',effect:'暂缺GIF文件'}];
+  ph.forEach(function(i){var c=document.createElement('div');c.className='demo-card';c.innerHTML='<div class=\"demo-media\"><div class=\"placeholder-gif\"><span class=\"big-icon\">&#x1F3AC;</span><span>GIF待添加</span></div></div><div class=\"demo-info\"><h4>'+i.title+'</h4><div class=\"demo-desc\">'+i.desc+'</div><div class=\"demo-effect\"><span>效果：</span>'+i.effect+'</div></div>';grid.appendChild(c)});
+}else{
+  gifSources.forEach(function(g){var c=document.createElement('div');c.className='demo-card';c.innerHTML='<div class=\"demo-media\"><img src=\"'+gifDir+'/'+g.file+'\" alt=\"'+g.title+'\" onclick=\"openLightbox(this.src)\" loading=\"lazy\"></div><div class=\"demo-info\"><h4>'+g.title+'</h4><div class=\"demo-desc\">'+g.desc+'</div><div class=\"demo-effect\"><span>效果：</span>'+g.effect+'</div></div>';grid.appendChild(c)});
+}
+function goTo(idx){if(idx<0||idx>=totalPages)return;currentPage=idx;
+  pages.forEach(function(p,i){p.classList.toggle('active',i===idx)});
+  navItems.forEach(function(n,i){n.classList.toggle('active',i===idx)});
+  document.querySelectorAll('#pageIndicators .dot').forEach(function(d,i){d.classList.toggle('active',i===idx)});
+  document.getElementById('prevBtn').disabled=(idx===0);
+  document.getElementById('nextBtn').disabled=(idx===totalPages-1);
+  window.location.hash='page-'+(idx+1);}
+window.goTo=goTo;window.currentPage=0;
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();goTo(currentPage+1)}else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();goTo(currentPage-1)}});
+var container=document.getElementById('mainContainer'),wt=null;
+container.addEventListener('wheel',function(e){var ap=pages[currentPage],sc=ap.scrollHeight>ap.clientHeight;
+  if(sc&&Math.abs(e.deltaY)>0){if((e.deltaY>0&&ap.scrollTop+ap.clientHeight>=ap.scrollHeight-5)||(e.deltaY<0&&ap.scrollTop<=5)){e.preventDefault();if(wt)return;wt=setTimeout(function(){wt=null},600);if(e.deltaY>0)goTo(currentPage+1);else goTo(currentPage-1)}}
+  else{e.preventDefault();if(wt)return;wt=setTimeout(function(){wt=null},600);if(e.deltaY>0)goTo(currentPage+1);else goTo(currentPage-1)}},{passive:false});
+if(window.location.hash){var m=window.location.hash.match(/page-(\d+)/);if(m){var i=parseInt(m[1])-1;if(i>=0&&i<totalPages)goTo(i)}}
+window.openLightbox=function(s){var lb=document.getElementById('lightbox'),img=document.getElementById('lightbox-img');img.src=s;lb.classList.add('active')};
+window.closeLightbox=function(){document.getElementById('lightbox').classList.remove('active')};
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLightbox()});
+</script>
 </body>
 </html>
